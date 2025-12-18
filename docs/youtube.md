@@ -23,7 +23,7 @@ YouTube URLs use transcript-first extraction.
 
 - If no transcript is available, we still extract `ytInitialPlayerResponse.videoDetails.shortDescription` so YouTube links can still summarize meaningfully.
 - Apify is an optional fallback (needs `APIFY_API_TOKEN`).
-  - By default, we use the actor id `dB9f4B02ocpTICIEY` (Topaz Sharigan’s “YouTube Transcript Ninja”).
+  - By default, we use the actor id `faVsWy9VTSNVIhWpR` (Pinto Studio’s “Youtube Transcript Scraper”).
   - Override via `--apify-youtube-actor` / `SUMMARIZE_APIFY_YOUTUBE_ACTOR` / `config.json: apifyYoutubeActor`.
 
 ## Example

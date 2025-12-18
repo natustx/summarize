@@ -33,6 +33,31 @@ describe('YouTube Apify transcript provider', () => {
     ).toBe('Line 1\nLine 2')
   })
 
+  it('supports Pinto Studio dataset format', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json(
+        [
+          {
+            data: [
+              { start: '0', dur: '1', text: ' Line 1 ' },
+              { start: '1', dur: '1', text: 'Line 2' },
+            ],
+          },
+        ],
+        { status: 200 }
+      )
+    )
+
+    expect(
+      await fetchTranscriptWithApify(
+        fetchMock as unknown as typeof fetch,
+        'TOKEN',
+        'faVsWy9VTSNVIhWpR',
+        'https://youtu.be/x'
+      )
+    ).toBe('Line 1\nLine 2')
+  })
+
   it('uses the configured actor id', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.url
