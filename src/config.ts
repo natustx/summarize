@@ -10,16 +10,6 @@ export type SummarizeConfig = {
    * - google/gemini-2.0-flash
    */
   model?: string
-
-  /**
-   * Optional Apify actor identifier used for YouTube transcript fallback when `--youtube apify` is enabled.
-   *
-   * Accepted formats:
-   * - Actor id: `dB9f4B02ocpTICIEY`
-   * - Store id: `username~actor-name`
-   * - Shorthand: `username/actor-name` (will be normalized to `username~actor-name`)
-   */
-  apifyYoutubeActor?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,7 +58,5 @@ export function loadSummarizeConfig({
   }
 
   const model = typeof parsed.model === 'string' ? parsed.model : undefined
-  const apifyYoutubeActor =
-    typeof parsed.apifyYoutubeActor === 'string' ? parsed.apifyYoutubeActor : undefined
-  return { config: { model, apifyYoutubeActor }, path }
+  return { config: { model }, path }
 }

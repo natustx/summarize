@@ -12,7 +12,6 @@ export interface ProviderContext {
 export interface ProviderFetchOptions {
   fetch: typeof fetch
   apifyApiToken: string | null
-  apifyYoutubeActor: string | null
   youtubeTranscriptMode: YoutubeTranscriptMode
 }
 

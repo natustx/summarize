@@ -1,33 +1,10 @@
 import { fetchWithTimeout } from '../../../fetch-with-timeout.js'
-import { normalizeApifyTranscript } from '../../normalize.js'
 import { isRecord } from '../../utils.js'
 
-const DEFAULT_APIFY_YOUTUBE_ACTOR = 'faVsWy9VTSNVIhWpR'
-const LEGACY_TOPAZ_ACTOR = 'dB9f4B02ocpTICIEY'
+const PINTO_YOUTUBE_TRANSCRIPT_SCRAPER_ACTOR = 'faVsWy9VTSNVIhWpR'
 
 type ApifyTranscriptItem = Record<string, unknown> & {
-  transcript?: unknown
-  transcriptText?: unknown
-  text?: unknown
   data?: unknown
-}
-
-function normalizeApifyActorId(input: string | null): string {
-  const raw = typeof input === 'string' ? input.trim() : ''
-  if (!raw) return DEFAULT_APIFY_YOUTUBE_ACTOR
-  if (raw.includes('~')) return raw
-  const slashIndex = raw.indexOf('/')
-  if (slashIndex > 0 && slashIndex < raw.length - 1) {
-    return `${raw.slice(0, slashIndex)}~${raw.slice(slashIndex + 1)}`
-  }
-  return raw
-}
-
-function isLegacyTopazActor(actor: string): boolean {
-  return (
-    actor === LEGACY_TOPAZ_ACTOR ||
-    actor.toLowerCase() === 'topaz_sharingan~youtube-transcript-scraper-1'
-  )
 }
 
 function normalizePintoTranscript(raw: unknown): string | null {
@@ -46,25 +23,21 @@ function normalizePintoTranscript(raw: unknown): string | null {
 export const fetchTranscriptWithApify = async (
   fetchImpl: typeof fetch,
   apifyApiToken: string | null,
-  apifyYoutubeActor: string | null,
   url: string
 ): Promise<string | null> => {
   if (!apifyApiToken) {
     return null
   }
 
-  const actor = normalizeApifyActorId(apifyYoutubeActor)
-  const useLegacyBody = isLegacyTopazActor(actor)
-
   try {
     const response = await fetchWithTimeout(
       fetchImpl,
-      `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${apifyApiToken}`,
+      `https://api.apify.com/v2/acts/${PINTO_YOUTUBE_TRANSCRIPT_SCRAPER_ACTOR}/run-sync-get-dataset-items?token=${apifyApiToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...(useLegacyBody ? { startUrls: [url], includeTimestamps: 'No' } : { videoUrl: url }),
+          videoUrl: url,
         }),
       },
       45_000
@@ -84,12 +57,7 @@ export const fetchTranscriptWithApify = async (
         continue
       }
       const recordItem = item as ApifyTranscriptItem
-      const normalized =
-        normalizeApifyTranscript(recordItem.transcript) ??
-        normalizeApifyTranscript(recordItem.transcriptText) ??
-        normalizeApifyTranscript(recordItem.text) ??
-        normalizePintoTranscript(recordItem.data) ??
-        normalizePintoTranscript(recordItem)
+      const normalized = normalizePintoTranscript(recordItem)
       if (normalized) {
         return normalized
       }

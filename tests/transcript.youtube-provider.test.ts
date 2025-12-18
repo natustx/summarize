@@ -35,7 +35,10 @@ describe('YouTube transcript provider module', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.url
       if (url.includes('api.apify.com')) {
-        return Response.json([{ transcriptText: 'Hello from apify' }], { status: 200 })
+        return Response.json(
+          [{ data: [{ start: '0', dur: '1', text: 'Hello from apify' }] }],
+          { status: 200 }
+        )
       }
       throw new Error(`Unexpected fetch call: ${url}`)
     })
