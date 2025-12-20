@@ -826,6 +826,7 @@ export async function runCli(
   const xaiConfigured = typeof xaiApiKey === 'string' && xaiApiKey.length > 0
   const anthropicConfigured = typeof anthropicApiKey === 'string' && anthropicApiKey.length > 0
   const openrouterConfigured = typeof openrouterApiKey === 'string' && openrouterApiKey.length > 0
+  const openrouterOptions = openRouterProviders ? { providers: openRouterProviders } : undefined
 
   const llmCalls: LlmCall[] = []
   let firecrawlRequests = 0
@@ -993,7 +994,6 @@ export async function runCli(
       anthropicApiKey: anthropicConfigured ? anthropicApiKey : null,
       openrouterApiKey: openrouterConfigured ? openrouterApiKey : null,
     }
-    const openrouterOptions = openRouterProviders ? { providers: openRouterProviders } : undefined
 
     const requiredKeyEnv =
       parsedModel.provider === 'xai'
@@ -1564,6 +1564,7 @@ export async function runCli(
           openaiApiKey: apiKey,
           anthropicApiKey: anthropicConfigured ? anthropicApiKey : null,
           openrouterApiKey: openrouterConfigured ? openrouterApiKey : null,
+          openrouter: openrouterOptions,
           fetchImpl: trackedFetch,
           onUsage: ({ model: usedModel, provider, usage }) => {
             llmCalls.push({ provider, model: usedModel, usage, purpose: 'markdown' })
@@ -2028,7 +2029,6 @@ export async function runCli(
       anthropicApiKey: anthropicConfigured ? anthropicApiKey : null,
       openrouterApiKey: openrouterConfigured ? openrouterApiKey : null,
     }
-    const openrouterOptions = openRouterProviders ? { providers: openRouterProviders } : undefined
 
     const requiredKeyEnv =
       parsedModel.provider === 'xai'

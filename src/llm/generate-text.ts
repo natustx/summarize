@@ -19,6 +19,14 @@ export type LlmTokenUsage = {
   totalTokens: number | null
 }
 
+type OpenAiClientConfig = {
+  apiKey: string
+  baseURL?: string
+  fetch: typeof fetch
+  useChatCompletions: boolean
+  isOpenRouter: boolean
+}
+
 function parseAnthropicErrorPayload(
   responseBody: string
 ): { type: string; message: string } | null {
@@ -89,6 +97,55 @@ function normalizeTokenUsage(raw: unknown): LlmTokenUsage | null {
     return null
   }
   return { promptTokens, completionTokens, totalTokens }
+}
+
+function resolveOpenAiClientConfig({
+  apiKeys,
+  openrouter,
+  fetchImpl,
+}: {
+  apiKeys: LlmApiKeys
+  openrouter?: OpenRouterOptions
+  fetchImpl: typeof fetch
+}): OpenAiClientConfig {
+  const baseUrlRaw = typeof process !== 'undefined' ? process.env.OPENAI_BASE_URL : undefined
+  const baseUrl =
+    typeof baseUrlRaw === 'string' && baseUrlRaw.trim().length > 0 ? baseUrlRaw.trim() : null
+  const isOpenRouterViaBaseUrl = baseUrl ? /openrouter\.ai/i.test(baseUrl) : false
+  const hasOpenRouterKey = apiKeys.openrouterApiKey != null
+  const isOpenRouter = isOpenRouterViaBaseUrl || (hasOpenRouterKey && !baseUrl)
+
+  const apiKey = isOpenRouter
+    ? (apiKeys.openrouterApiKey ?? apiKeys.openaiApiKey)
+    : apiKeys.openaiApiKey
+  if (!apiKey) {
+    throw new Error(
+      isOpenRouter
+        ? 'Missing OPENROUTER_API_KEY (or OPENAI_API_KEY) for OpenRouter'
+        : 'Missing OPENAI_API_KEY for openai/... model'
+    )
+  }
+
+  const openrouterProviders = openrouter?.providers?.length ? openrouter.providers : null
+  const wrappedFetch: typeof fetch = isOpenRouter && openrouterProviders
+    ? (url, init) => {
+        const headers = new Headers(init?.headers)
+        headers.set('HTTP-Referer', 'https://github.com/steipete/summarize')
+        headers.set('X-Title', 'summarize')
+        headers.set('X-OpenRouter-Provider-Order', openrouterProviders.join(','))
+        return fetchImpl(url, { ...init, headers })
+      }
+    : fetchImpl
+
+  const baseURL = baseUrl ?? (isOpenRouter ? 'https://openrouter.ai/api/v1' : undefined)
+
+  return {
+    apiKey,
+    baseURL: baseURL ?? undefined,
+    fetch: wrappedFetch,
+    useChatCompletions: isOpenRouter,
+    isOpenRouter,
+  }
 }
 
 export async function generateTextWithModelId({
@@ -191,45 +248,16 @@ export async function generateTextWithModelId({
       }
     }
 
-    // Detect OpenRouter: via OPENROUTER_API_KEY or OPENAI_BASE_URL containing openrouter.ai
-    const baseUrl = typeof process !== 'undefined' ? process.env.OPENAI_BASE_URL : undefined
-    const isOpenRouterViaBaseUrl =
-      typeof baseUrl === 'string' && /openrouter\.ai/i.test(baseUrl) && baseUrl.length > 0
-    const isOpenRouter = apiKeys.openrouterApiKey != null || isOpenRouterViaBaseUrl
-
-    const apiKey = isOpenRouter
-      ? (apiKeys.openrouterApiKey ?? apiKeys.openaiApiKey)
-      : apiKeys.openaiApiKey
-    if (!apiKey) {
-      throw new Error(
-        isOpenRouter
-          ? 'Missing OPENROUTER_API_KEY for OpenRouter'
-          : 'Missing OPENAI_API_KEY for openai/... model'
-      )
-    }
-
     const { createOpenAI } = await import('@ai-sdk/openai')
-
-    // Build fetch wrapper with OpenRouter provider ordering header
-    const openrouterProviders = openrouter?.providers
-    const wrappedFetch: typeof fetch = isOpenRouter && openrouterProviders?.length
-      ? (url, init) => {
-          const headers = new Headers(init?.headers)
-          headers.set('HTTP-Referer', 'https://github.com/steipete/summarize')
-          headers.set('X-Title', 'summarize')
-          headers.set('X-OpenRouter-Provider-Order', openrouterProviders.join(','))
-          return fetchImpl(url, { ...init, headers })
-        }
-      : fetchImpl
-
+    const openaiConfig = resolveOpenAiClientConfig({ apiKeys, openrouter, fetchImpl })
     const openai = createOpenAI({
-      apiKey,
-      ...(isOpenRouter ? { baseURL: 'https://openrouter.ai/api/v1' } : {}),
-      fetch: wrappedFetch,
+      apiKey: openaiConfig.apiKey,
+      ...(openaiConfig.baseURL ? { baseURL: openaiConfig.baseURL } : {}),
+      fetch: openaiConfig.fetch,
     })
 
     // OpenRouter requires chat completions endpoint
-    const useChatCompletions = isOpenRouter
+    const useChatCompletions = openaiConfig.useChatCompletions
     const responsesModelId = parsed.model as unknown as Parameters<typeof openai>[0]
     const chatModelId = parsed.model as unknown as Parameters<typeof openai.chat>[0]
     const result = await generateText({
@@ -438,45 +466,16 @@ export async function streamTextWithModelId({
       }
     }
 
-    // Detect OpenRouter: via OPENROUTER_API_KEY or OPENAI_BASE_URL containing openrouter.ai
-    const baseUrl = typeof process !== 'undefined' ? process.env.OPENAI_BASE_URL : undefined
-    const isOpenRouterViaBaseUrl =
-      typeof baseUrl === 'string' && /openrouter\.ai/i.test(baseUrl) && baseUrl.length > 0
-    const isOpenRouter = apiKeys.openrouterApiKey != null || isOpenRouterViaBaseUrl
-
-    const apiKey = isOpenRouter
-      ? (apiKeys.openrouterApiKey ?? apiKeys.openaiApiKey)
-      : apiKeys.openaiApiKey
-    if (!apiKey) {
-      throw new Error(
-        isOpenRouter
-          ? 'Missing OPENROUTER_API_KEY for OpenRouter'
-          : 'Missing OPENAI_API_KEY for openai/... model'
-      )
-    }
-
     const { createOpenAI } = await import('@ai-sdk/openai')
-
-    // Build fetch wrapper with OpenRouter provider ordering header
-    const openrouterProviders = openrouter?.providers
-    const wrappedFetch: typeof fetch = isOpenRouter && openrouterProviders?.length
-      ? (url, init) => {
-          const headers = new Headers(init?.headers)
-          headers.set('HTTP-Referer', 'https://github.com/steipete/summarize')
-          headers.set('X-Title', 'summarize')
-          headers.set('X-OpenRouter-Provider-Order', openrouterProviders.join(','))
-          return fetchImpl(url, { ...init, headers })
-        }
-      : fetchImpl
-
+    const openaiConfig = resolveOpenAiClientConfig({ apiKeys, openrouter, fetchImpl })
     const openai = createOpenAI({
-      apiKey,
-      ...(isOpenRouter ? { baseURL: 'https://openrouter.ai/api/v1' } : {}),
-      fetch: wrappedFetch,
+      apiKey: openaiConfig.apiKey,
+      ...(openaiConfig.baseURL ? { baseURL: openaiConfig.baseURL } : {}),
+      fetch: openaiConfig.fetch,
     })
 
     // OpenRouter requires chat completions endpoint
-    const useChatCompletions = isOpenRouter
+    const useChatCompletions = openaiConfig.useChatCompletions
     const responsesModelId = parsed.model as unknown as Parameters<typeof openai>[0]
     const chatModelId = parsed.model as unknown as Parameters<typeof openai.chat>[0]
     const result = streamText({

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 - Unreleased
+
+### Changes
+
+- Respect `OPENAI_BASE_URL` when set, even with OpenRouter keys.
+- Apply OpenRouter provider ordering headers to HTML→Markdown conversion.
+- Add OpenRouter configuration tests. Thanks @dougvk for the initial OpenRouter support.
+
 ## 0.2.0 - 2025-12-20
 
 ### Changes

@@ -21,6 +21,7 @@ describe('HTML→Markdown converter', async () => {
       xaiApiKey: null,
       googleApiKey: null,
       openaiApiKey: 'test',
+      openrouterApiKey: null,
       fetchImpl: globalThis.fetch.bind(globalThis),
     })
 
@@ -53,6 +54,7 @@ describe('HTML→Markdown converter', async () => {
       xaiApiKey: null,
       googleApiKey: null,
       openaiApiKey: 'test',
+      openrouterApiKey: null,
       fetchImpl: globalThis.fetch.bind(globalThis),
     })
 
@@ -67,5 +69,32 @@ describe('HTML→Markdown converter', async () => {
 
     const args = generateTextWithModelIdMock.mock.calls[0]?.[0] as { prompt: string }
     expect(args.prompt).not.toContain('MARKER')
+  })
+
+  it('forwards OpenRouter provider options to generateTextWithModelId', async () => {
+    generateTextWithModelIdMock.mockClear()
+
+    const converter = createHtmlToMarkdownConverter({
+      modelId: 'openai/openai/gpt-oss-20b',
+      xaiApiKey: null,
+      googleApiKey: null,
+      openaiApiKey: null,
+      openrouterApiKey: 'test',
+      openrouter: { providers: ['groq', 'google-vertex'] },
+      fetchImpl: globalThis.fetch.bind(globalThis),
+    })
+
+    await converter({
+      url: 'https://example.com',
+      title: 'Example',
+      siteName: 'Example',
+      html: '<html><body><h1>Hello</h1></body></html>',
+      timeoutMs: 2000,
+    })
+
+    const args = generateTextWithModelIdMock.mock.calls[0]?.[0] as {
+      openrouter?: { providers?: string[] }
+    }
+    expect(args.openrouter?.providers).toEqual(['groq', 'google-vertex'])
   })
 })
