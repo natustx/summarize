@@ -19,6 +19,12 @@ Requires Node 22+.
 npx -y @steipete/summarize "https://example.com" --model google/gemini-3-flash-preview
 ```
 
+- npm (global install):
+
+```bash
+npm i -g @steipete/summarize
+```
+
 - Homebrew (custom tap):
 
 ```bash
@@ -113,7 +119,8 @@ npx -y @steipete/summarize <input> [flags]
 - `--stream auto|on|off`: stream LLM output (`auto` = TTY only; disabled in `--json` mode)
 - `--render auto|md-live|md|plain`: Markdown rendering (`auto` = best default for TTY)
 - `--format md|text`: website/file content format (default `text`)
-- `--preprocess off|auto|always`: preprocess files (only with `--format md`) for model compatibility (default `auto`)
+- `--preprocess off|auto|always`: controls `uvx markitdown` usage (default `auto`; `always` forces file preprocessing)
+  - Install `uvx`: `brew install uv` (or https://astral.sh/uv/)
 - `--extract`: print extracted content and exit (no summary) — only for URLs
   - Deprecated alias: `--extract-only`
 - `--json`: machine-readable output with diagnostics, prompt, `metrics`, and optional summary
@@ -127,6 +134,9 @@ Non-YouTube URLs go through a “fetch → extract” pipeline. When the direct 
 - `--firecrawl off|auto|always` (default `auto`)
 - `--extract --format md|text` (default `text`)
 - `--markdown-mode off|auto|llm` (default `auto`; only affects `--format md` for non-YouTube URLs)
+  - `auto`: use an LLM converter when configured; may fall back to `uvx markitdown`
+  - `llm`: force LLM conversion (requires a configured model key)
+  - `off`: disable LLM conversion (still may return Firecrawl Markdown when configured)
 - Plain-text mode: use `--format text`.
 
 ## YouTube transcripts
