@@ -33,7 +33,21 @@ describe('--model free OpenRouter provider routing errors', () => {
       2000
     )}</p></article></body></html>`
 
-    const fetchMock = vi.fn(async () => new Response(html, { status: 200 }))
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.startsWith('https://openrouter.ai/api/v1/models/')) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              endpoints: [{ provider_name: 'Google AI Studio' }],
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      }
+      return new Response(html, { status: 200 })
+    })
 
     const stdout = collectStream()
     const stderr = collectStream()
@@ -45,7 +59,7 @@ describe('--model free OpenRouter provider routing errors', () => {
         stdout: stdout.stream,
         stderr: stderr.stream,
       })
-    ).rejects.toThrow(/OpenRouter could not route any :free models/i)
+    ).rejects.toThrow(/Providers to allow:.*Google AI Studio/i)
 
     expect(stdout.getText()).not.toContain('A'.repeat(50))
     expect(stdout.getText().trim()).toBe('')

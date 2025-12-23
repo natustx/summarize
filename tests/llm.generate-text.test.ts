@@ -344,7 +344,6 @@ describe('llm generate/stream', () => {
       prompt: 'hi',
       timeoutMs: 2000,
       fetchImpl,
-      openrouter: { providers: ['groq', 'google-vertex'] },
     })
 
     const openaiOptions = openaiFactoryMock.mock.calls[0]?.[0] as {
@@ -376,7 +375,6 @@ describe('llm generate/stream', () => {
       prompt: 'hi',
       timeoutMs: 2000,
       fetchImpl,
-      openrouter: { providers: ['groq', 'google-vertex'] },
     })
 
     const openaiOptions = openaiFactoryMock.mock.calls[0]?.[0] as {
@@ -395,7 +393,7 @@ describe('llm generate/stream', () => {
     expect(headers.get('X-Test')).toBe('1')
     expect(headers.get('HTTP-Referer')).toBe('https://github.com/steipete/summarize')
     expect(headers.get('X-Title')).toBe('summarize')
-    expect(headers.get('X-OpenRouter-Provider-Order')).toBe('groq,google-vertex')
+    expect(headers.get('X-OpenRouter-Provider-Order')).toBeNull()
 
     const args = generateTextMock.mock.calls[0]?.[0] as { model?: { kind?: string } }
     expect(args.model?.kind).toBe('chat')

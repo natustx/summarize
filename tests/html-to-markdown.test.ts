@@ -71,7 +71,7 @@ describe('HTML→Markdown converter', async () => {
     expect(args.prompt).not.toContain('MARKER')
   })
 
-  it('forwards OpenRouter provider options to generateTextWithModelId', async () => {
+  it('does not forward OpenRouter provider options to generateTextWithModelId', async () => {
     generateTextWithModelIdMock.mockClear()
 
     const converter = createHtmlToMarkdownConverter({
@@ -80,7 +80,6 @@ describe('HTML→Markdown converter', async () => {
       googleApiKey: null,
       openaiApiKey: null,
       openrouterApiKey: 'test',
-      openrouter: { providers: ['groq', 'google-vertex'] },
       fetchImpl: globalThis.fetch.bind(globalThis),
     })
 
@@ -93,8 +92,8 @@ describe('HTML→Markdown converter', async () => {
     })
 
     const args = generateTextWithModelIdMock.mock.calls[0]?.[0] as {
-      openrouter?: { providers?: string[] }
+      openrouter?: unknown
     }
-    expect(args.openrouter?.providers).toEqual(['groq', 'google-vertex'])
+    expect(args.openrouter).toBeUndefined()
   })
 })

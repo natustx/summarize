@@ -33,7 +33,7 @@ Behavior:
 
 OpenRouter provider ordering:
 
-- Global default: `OPENROUTER_PROVIDERS="groq,google-vertex,..."` (optional)
+- `OPENROUTER_PROVIDERS` is deprecated and ignored.
 
 ## How selection works
 

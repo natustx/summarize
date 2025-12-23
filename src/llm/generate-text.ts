@@ -113,12 +113,10 @@ function normalizeTokenUsage(raw: unknown): LlmTokenUsage | null {
 
 function resolveOpenAiClientConfig({
   apiKeys,
-  openrouter,
   fetchImpl,
   forceOpenRouter,
 }: {
   apiKeys: LlmApiKeys
-  openrouter?: OpenRouterOptions
   fetchImpl: typeof fetch
   forceOpenRouter?: boolean
 }): OpenAiClientConfig {
@@ -144,17 +142,14 @@ function resolveOpenAiClientConfig({
     )
   }
 
-  const openrouterProviders = openrouter?.providers?.length ? openrouter.providers : null
-  const wrappedFetch: typeof fetch =
-    isOpenRouter && openrouterProviders
-      ? (url, init) => {
-          const headers = new Headers(init?.headers)
-          headers.set('HTTP-Referer', 'https://github.com/steipete/summarize')
-          headers.set('X-Title', 'summarize')
-          headers.set('X-OpenRouter-Provider-Order', openrouterProviders.join(','))
-          return fetchImpl(url, { ...init, headers })
-        }
-      : fetchImpl
+  const wrappedFetch: typeof fetch = isOpenRouter
+    ? (url, init) => {
+        const headers = new Headers(init?.headers)
+        headers.set('HTTP-Referer', 'https://github.com/steipete/summarize')
+        headers.set('X-Title', 'summarize')
+        return fetchImpl(url, { ...init, headers })
+      }
+    : fetchImpl
 
   const baseURL = forceOpenRouter
     ? 'https://openrouter.ai/api/v1'
@@ -178,7 +173,6 @@ export async function generateTextWithModelId({
   maxOutputTokens,
   timeoutMs,
   fetchImpl,
-  openrouter,
   forceOpenRouter,
   retries = 0,
   onRetry,
@@ -191,7 +185,6 @@ export async function generateTextWithModelId({
   maxOutputTokens?: number
   timeoutMs: number
   fetchImpl: typeof fetch
-  openrouter?: OpenRouterOptions
   forceOpenRouter?: boolean
   retries?: number
   onRetry?: (notice: RetryNotice) => void
@@ -287,7 +280,6 @@ export async function generateTextWithModelId({
       const { createOpenAI } = await import('@ai-sdk/openai')
       const openaiConfig = resolveOpenAiClientConfig({
         apiKeys,
-        openrouter,
         fetchImpl,
         forceOpenRouter,
       })
@@ -375,7 +367,6 @@ export async function streamTextWithModelId({
   maxOutputTokens,
   timeoutMs,
   fetchImpl,
-  openrouter,
   forceOpenRouter,
 }: {
   modelId: string
@@ -386,7 +377,6 @@ export async function streamTextWithModelId({
   maxOutputTokens?: number
   timeoutMs: number
   fetchImpl: typeof fetch
-  openrouter?: OpenRouterOptions
   forceOpenRouter?: boolean
 }): Promise<{
   textStream: AsyncIterable<string>
@@ -554,7 +544,6 @@ export async function streamTextWithModelId({
     const { createOpenAI } = await import('@ai-sdk/openai')
     const openaiConfig = resolveOpenAiClientConfig({
       apiKeys,
-      openrouter,
       fetchImpl,
       forceOpenRouter,
     })

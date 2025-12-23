@@ -18,6 +18,7 @@ import {
   resolveInputTarget,
 } from './content/asset.js'
 import { createLinkPreviewClient } from './content/index.js'
+import { fetchWithTimeout } from './content/link-preview/fetch-with-timeout.js'
 import type { LlmCall } from './costs.js'
 import { buildRunMetricsReport } from './costs.js'
 import { createFirecrawlScraper } from './firecrawl.js'
@@ -79,6 +80,93 @@ const SUMMARY_LENGTH_MAX_CHARACTERS: Record<SummaryLength, number> = {
   long: 6000,
   xl: 14000,
   xxl: Number.POSITIVE_INFINITY,
+}
+
+function truncateList(items: string[], max: number): string {
+  const normalized = items.map((item) => item.trim()).filter(Boolean)
+  if (normalized.length <= max) return normalized.join(', ')
+  return `${normalized.slice(0, max).join(', ')} (+${normalized.length - max} more)`
+}
+
+function parseOpenRouterModelId(modelId: string): { author: string; slug: string } | null {
+  const normalized = modelId.trim()
+  if (!normalized.startsWith('openrouter/')) return null
+  const rest = normalized.slice('openrouter/'.length)
+  const [author, ...slugParts] = rest.split('/')
+  if (!author || slugParts.length === 0) return null
+  return { author, slug: slugParts.join('/') }
+}
+
+async function resolveOpenRouterProvidersForModels({
+  modelIds,
+  fetchImpl,
+  timeoutMs,
+}: {
+  modelIds: string[]
+  fetchImpl: typeof fetch
+  timeoutMs: number
+}): Promise<Map<string, string[]>> {
+  const results = new Map<string, string[]>()
+  const unique = Array.from(new Set(modelIds.map((id) => id.trim()).filter(Boolean)))
+
+  await Promise.all(
+    unique.map(async (modelId) => {
+      const parsed = parseOpenRouterModelId(modelId)
+      if (!parsed) return
+      const url = `https://openrouter.ai/api/v1/models/${encodeURIComponent(parsed.author)}/${encodeURIComponent(parsed.slug)}/endpoints`
+      try {
+        const response = await fetchWithTimeout(
+          fetchImpl,
+          url,
+          { headers: { Accept: 'application/json' } },
+          Math.min(timeoutMs, 15_000)
+        )
+        if (!response.ok) return
+        const payload = (await response.json()) as {
+          data?: { endpoints?: Array<{ provider_name?: unknown } | null> }
+        }
+        const endpoints = Array.isArray(payload.data?.endpoints) ? payload.data?.endpoints : []
+        const providers = endpoints
+          .map((endpoint) =>
+            endpoint && typeof endpoint.provider_name === 'string'
+              ? endpoint.provider_name.trim()
+              : null
+          )
+          .filter((value): value is string => Boolean(value))
+        const uniqueProviders = Array.from(new Set(providers)).sort((a, b) => a.localeCompare(b))
+        if (uniqueProviders.length > 0) results.set(modelId, uniqueProviders)
+      } catch {
+        // best-effort only
+      }
+    })
+  )
+
+  return results
+}
+
+async function buildOpenRouterNoAllowedProvidersMessage({
+  attempts,
+  fetchImpl,
+  timeoutMs,
+}: {
+  attempts: Array<{ userModelId: string }>
+  fetchImpl: typeof fetch
+  timeoutMs: number
+}): Promise<string> {
+  const modelIds = attempts
+    .map((attempt) => attempt.userModelId)
+    .filter((id) => id.startsWith('openrouter/'))
+  const tried = truncateList(modelIds, 6)
+
+  const providerMap = await resolveOpenRouterProvidersForModels({ modelIds, fetchImpl, timeoutMs })
+  const allProviders = Array.from(new Set(Array.from(providerMap.values()).flat())).sort((a, b) =>
+    a.localeCompare(b)
+  )
+
+  const providersHint =
+    allProviders.length > 0 ? ` Providers to allow: ${truncateList(allProviders, 10)}.` : ''
+
+  return `OpenRouter could not route any :free models with this API key (no allowed providers). Tried: ${tried}.${providersHint} (OpenRouter: Settings → API Keys → edit key → Allowed providers.)`
 }
 
 function resolveTargetCharacters(
@@ -724,7 +812,7 @@ ${heading('Env Vars')}
   OPENAI_API_KEY        optional (required for openai/... models)
   OPENAI_BASE_URL       optional (OpenAI-compatible API endpoint; e.g. OpenRouter)
   OPENROUTER_API_KEY    optional (routes openai/... models through OpenRouter)
-  OPENROUTER_PROVIDERS  optional (provider fallback order, e.g. "groq,google-vertex")
+  OPENROUTER_PROVIDERS  deprecated (ignored)
   GEMINI_API_KEY        optional (required for google/... models)
   ANTHROPIC_API_KEY     optional (required for anthropic/... models)
   CLAUDE_PATH           optional (path to Claude CLI binary)
@@ -746,7 +834,6 @@ async function summarizeWithModelId({
   timeoutMs,
   fetchImpl,
   apiKeys,
-  openrouter,
   forceOpenRouter,
   retries,
   onRetry,
@@ -763,7 +850,6 @@ async function summarizeWithModelId({
     anthropicApiKey: string | null
     openrouterApiKey: string | null
   }
-  openrouter?: { providers: string[] | null }
   forceOpenRouter?: boolean
   retries: number
   onRetry?: (notice: {
@@ -781,7 +867,6 @@ async function summarizeWithModelId({
   const result = await generateTextWithModelId({
     modelId,
     apiKeys,
-    openrouter,
     forceOpenRouter,
     prompt,
     temperature: 0,
@@ -1131,14 +1216,6 @@ export async function runCli(
   const openaiBaseUrl = typeof env.OPENAI_BASE_URL === 'string' ? env.OPENAI_BASE_URL : null
   const openRouterKeyRaw =
     typeof env.OPENROUTER_API_KEY === 'string' ? env.OPENROUTER_API_KEY : null
-  const openRouterProvidersRaw =
-    typeof env.OPENROUTER_PROVIDERS === 'string' ? env.OPENROUTER_PROVIDERS : null
-  const openRouterProviders = openRouterProvidersRaw
-    ? openRouterProvidersRaw
-        .split(',')
-        .map((p) => p.trim())
-        .filter(Boolean)
-    : null
   const openaiKeyRaw = typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY : null
   const apiKey =
     typeof openaiBaseUrl === 'string' && /openrouter\.ai/i.test(openaiBaseUrl)
@@ -1178,7 +1255,6 @@ export async function runCli(
   const xaiConfigured = typeof xaiApiKey === 'string' && xaiApiKey.length > 0
   const anthropicConfigured = typeof anthropicApiKey === 'string' && anthropicApiKey.length > 0
   const openrouterConfigured = typeof openrouterApiKey === 'string' && openrouterApiKey.length > 0
-  const openrouterOptions = openRouterProviders ? { providers: openRouterProviders } : undefined
   const cliAvailability = resolveCliAvailability({ env, config: configForCli })
   const envForAuto = openrouterApiKey ? { ...env, OPENROUTER_API_KEY: openrouterApiKey } : env
 
@@ -1376,11 +1452,7 @@ export async function runCli(
   }
 
   const fixedModelSpec: FixedModelSpec | null =
-    requestedModel.kind === 'fixed'
-      ? requestedModel.transport === 'openrouter'
-        ? { ...requestedModel, openrouterProviders: openRouterProviders }
-        : requestedModel
-      : null
+    requestedModel.kind === 'fixed' ? requestedModel : null
 
   const desiredOutputTokens = (() => {
     if (typeof maxOutputTokensArg === 'number') return maxOutputTokensArg
@@ -1570,10 +1642,6 @@ export async function runCli(
       }
     }
 
-    const openrouterForAttempt = attempt.forceOpenRouter
-      ? { providers: attempt.openrouterProviders }
-      : openrouterOptions
-
     if (!streamingEnabledForCall) {
       const result = await summarizeWithModelId({
         modelId: parsedModelEffective.canonical,
@@ -1582,7 +1650,6 @@ export async function runCli(
         timeoutMs,
         fetchImpl: trackedFetch,
         apiKeys: apiKeysForLlm,
-        openrouter: openrouterForAttempt,
         forceOpenRouter: attempt.forceOpenRouter,
         retries,
         onRetry: createRetryLogger({
@@ -1627,7 +1694,6 @@ export async function runCli(
       streamResult = await streamTextWithModelId({
         modelId: parsedModelEffective.canonical,
         apiKeys: apiKeysForLlm,
-        openrouter: openrouterForAttempt,
         forceOpenRouter: attempt.forceOpenRouter,
         prompt,
         temperature: 0,
@@ -1650,7 +1716,6 @@ export async function runCli(
           timeoutMs,
           fetchImpl: trackedFetch,
           apiKeys: apiKeysForLlm,
-          openrouter: openrouterForAttempt,
           forceOpenRouter: attempt.forceOpenRouter,
           retries,
           onRetry: createRetryLogger({
@@ -1685,7 +1750,6 @@ export async function runCli(
           timeoutMs,
           fetchImpl: trackedFetch,
           apiKeys: apiKeysForLlm,
-          openrouter: openrouterForAttempt,
           forceOpenRouter: attempt.forceOpenRouter,
           retries,
           onRetry: createRetryLogger({
@@ -2053,7 +2117,7 @@ export async function runCli(
           env: envForAuto,
           config: configForCli,
           catalog,
-          openrouterProvidersFromEnv: openRouterProviders,
+          openrouterProvidersFromEnv: null,
           cliAvailability,
         })
         const mapped: ModelAttempt[] = all.map((attempt) => {
@@ -2190,10 +2254,12 @@ export async function runCli(
           if (
             /No allowed providers are available for the selected model/i.test(lastError.message)
           ) {
-            throw new Error(
-              'OpenRouter could not route any :free models with this API key (no allowed providers). Try a different OpenRouter key, or use --model auto.',
-              { cause: lastError }
-            )
+            const message = await buildOpenRouterNoAllowedProvidersMessage({
+              attempts,
+              fetchImpl: trackedFetch,
+              timeoutMs,
+            })
+            throw new Error(message, { cause: lastError })
           }
           throw lastError
         }
@@ -2584,7 +2650,6 @@ export async function runCli(
           openaiApiKey: apiKey,
           anthropicApiKey: anthropicConfigured ? anthropicApiKey : null,
           openrouterApiKey: openrouterConfigured ? openrouterApiKey : null,
-          openrouter: openrouterOptions,
           fetchImpl: trackedFetch,
           retries,
           onRetry: createRetryLogger({
@@ -3286,7 +3351,7 @@ export async function runCli(
           env: envForAuto,
           config: configForCli,
           catalog,
-          openrouterProvidersFromEnv: openRouterProviders,
+          openrouterProvidersFromEnv: null,
           cliAvailability,
         })
         if (verbose) {
@@ -3389,10 +3454,12 @@ export async function runCli(
           if (
             /No allowed providers are available for the selected model/i.test(lastError.message)
           ) {
-            throw new Error(
-              'OpenRouter could not route any :free models with this API key (no allowed providers). Try a different OpenRouter key, or use --model auto.',
-              { cause: lastError }
-            )
+            const message = await buildOpenRouterNoAllowedProvidersMessage({
+              attempts,
+              fetchImpl: trackedFetch,
+              timeoutMs,
+            })
+            throw new Error(message, { cause: lastError })
           }
           throw lastError
         }

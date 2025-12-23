@@ -15,7 +15,7 @@ installed, auto mode can use local CLI models when `cli.enabled` is set (see `do
 - `OPENAI_API_KEY` (required for `openai/...` models)
 - `OPENAI_BASE_URL` (optional; OpenAI-compatible API endpoint, e.g. OpenRouter)
 - `OPENROUTER_API_KEY` (optional; required for `openrouter/...` models; also used when `OPENAI_BASE_URL` points to OpenRouter)
-- `OPENROUTER_PROVIDERS` (optional; provider fallback order for OpenRouter, e.g. `groq,google-vertex`)
+- `OPENROUTER_PROVIDERS` (deprecated; ignored)
 - `GEMINI_API_KEY` (required for `google/...` models; also accepts `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY`)
 - `ANTHROPIC_API_KEY` (required for `anthropic/...` models)
 - `SUMMARIZE_MODEL` (optional; overrides default model selection)
