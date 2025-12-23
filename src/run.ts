@@ -1080,6 +1080,19 @@ function writeFinishLine({
   stderr.write(`${ansi('1;32', line, color)}\n`)
 }
 
+function buildDetailedMetricsParts(report: ReturnType<typeof buildRunMetricsReport>): string[] {
+  const calls = report.llm.reduce((sum, row) => sum + row.calls, 0)
+  if (calls <= 0) return []
+  return [`calls=${calls.toLocaleString()}`]
+}
+
+function mergeOptionalParts(a: string[] | null, b: string[] | null): string[] | null {
+  const left = a && a.length > 0 ? a : null
+  const right = b && b.length > 0 ? b : null
+  if (left && right) return [...left, ...right]
+  return left ?? right
+}
+
 function formatCompactCount(value: number): string {
   if (!Number.isFinite(value)) return 'unknown'
   const abs = Math.abs(value)
@@ -1469,25 +1482,6 @@ export async function runCli(
     if (!isRichTty(stdout)) return 'plain'
     return streamingEnabled ? 'md-live' : 'md'
   })()
-  const writeMetricsReport = (report: ReturnType<typeof buildRunMetricsReport>) => {
-    const promptTokens = sumNumbersOrNull(report.llm.map((row) => row.promptTokens))
-    const completionTokens = sumNumbersOrNull(report.llm.map((row) => row.completionTokens))
-    const totalTokens = sumNumbersOrNull(report.llm.map((row) => row.totalTokens))
-    for (const row of report.llm) {
-      stderr.write(
-        `metrics llm provider=${row.provider} model=${row.model} calls=${row.calls} promptTokens=${
-          row.promptTokens ?? 'unknown'
-        } completionTokens=${row.completionTokens ?? 'unknown'} totalTokens=${
-          row.totalTokens ?? 'unknown'
-        }\n`
-      )
-    }
-    stderr.write(`metrics firecrawl requests=${report.services.firecrawl.requests}\n`)
-    stderr.write(`metrics apify requests=${report.services.apify.requests}\n`)
-    stderr.write(
-      `metrics total tok(i/o/t)=${promptTokens ?? 'unknown'}/${completionTokens ?? 'unknown'}/${totalTokens ?? 'unknown'}\n`
-    )
-  }
 
   if (extractMode && inputTarget.kind !== 'url') {
     throw new Error('--extract is only supported for website/YouTube URLs')
@@ -2313,10 +2307,6 @@ export async function runCli(
         metrics: metricsEnabled ? finishReport : null,
         summary,
       }
-
-      if (metricsDetailed && finishReport) {
-        writeMetricsReport(finishReport)
-      }
       stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
       if (metricsEnabled && finishReport) {
         const costUsd = await estimateCostUsd()
@@ -2326,7 +2316,7 @@ export async function runCli(
           model: usedAttempt.userModelId,
           report: finishReport,
           costUsd,
-          extraParts: null,
+          extraParts: metricsDetailed ? buildDetailedMetricsParts(finishReport) : null,
           color: verboseColor,
         })
       }
@@ -2353,7 +2343,6 @@ export async function runCli(
     writeViaFooter([...assetFooterParts, `model ${usedAttempt.userModelId}`])
 
     const report = shouldComputeReport ? await buildReport() : null
-    if (metricsDetailed && report) writeMetricsReport(report)
     if (metricsEnabled && report) {
       const costUsd = await estimateCostUsd()
       writeFinishLine({
@@ -2362,7 +2351,7 @@ export async function runCli(
         model: usedAttempt.userModelId,
         report,
         costUsd,
-        extraParts: null,
+        extraParts: metricsDetailed ? buildDetailedMetricsParts(report) : null,
         color: verboseColor,
       })
     }
@@ -3137,9 +3126,6 @@ export async function runCli(
           metrics: metricsEnabled ? finishReport : null,
           summary: null,
         }
-        if (metricsDetailed && finishReport) {
-          writeMetricsReport(finishReport)
-        }
         stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
         if (metricsEnabled && finishReport) {
           const costUsd = await estimateCostUsd()
@@ -3149,7 +3135,12 @@ export async function runCli(
             model: requestedModelLabel,
             report: finishReport,
             costUsd,
-            extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+            extraParts: metricsDetailed
+              ? mergeOptionalParts(
+                  buildDetailedMetricsParts(finishReport),
+                  buildDetailedLengthPartsForExtracted(extracted)
+                )
+              : null,
             color: verboseColor,
           })
         }
@@ -3159,7 +3150,6 @@ export async function runCli(
       stdout.write(`${extracted.content}\n`)
       writeViaFooter(footerBaseParts)
       const report = shouldComputeReport ? await buildReport() : null
-      if (metricsDetailed && report) writeMetricsReport(report)
       if (metricsEnabled && report) {
         const costUsd = await estimateCostUsd()
         writeFinishLine({
@@ -3168,7 +3158,12 @@ export async function runCli(
           model: requestedModelLabel,
           report,
           costUsd,
-          extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+          extraParts: metricsDetailed
+            ? mergeOptionalParts(
+                buildDetailedMetricsParts(report),
+                buildDetailedLengthPartsForExtracted(extracted)
+              )
+            : null,
           color: verboseColor,
         })
       }
@@ -3220,9 +3215,6 @@ export async function runCli(
           metrics: metricsEnabled ? finishReport : null,
           summary: extracted.content,
         }
-        if (metricsDetailed && finishReport) {
-          writeMetricsReport(finishReport)
-        }
         stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
         if (metricsEnabled && finishReport) {
           const costUsd = await estimateCostUsd()
@@ -3232,7 +3224,12 @@ export async function runCli(
             model: requestedModelLabel,
             report: finishReport,
             costUsd,
-            extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+            extraParts: metricsDetailed
+              ? mergeOptionalParts(
+                  buildDetailedMetricsParts(finishReport),
+                  buildDetailedLengthPartsForExtracted(extracted)
+                )
+              : null,
             color: verboseColor,
           })
         }
@@ -3242,7 +3239,6 @@ export async function runCli(
       stdout.write(`${extracted.content}\n`)
       writeViaFooter(footerBaseParts)
       const report = shouldComputeReport ? await buildReport() : null
-      if (metricsDetailed && report) writeMetricsReport(report)
       if (metricsEnabled && report) {
         const costUsd = await estimateCostUsd()
         writeFinishLine({
@@ -3251,7 +3247,12 @@ export async function runCli(
           model: requestedModelLabel,
           report,
           costUsd,
-          extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+          extraParts: metricsDetailed
+            ? mergeOptionalParts(
+                buildDetailedMetricsParts(report),
+                buildDetailedLengthPartsForExtracted(extracted)
+              )
+            : null,
           color: verboseColor,
         })
       }
@@ -3474,10 +3475,6 @@ export async function runCli(
         metrics: metricsEnabled ? finishReport : null,
         summary,
       }
-
-      if (metricsDetailed && finishReport) {
-        writeMetricsReport(finishReport)
-      }
       stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
       if (metricsEnabled && finishReport) {
         const costUsd = await estimateCostUsd()
@@ -3487,7 +3484,12 @@ export async function runCli(
           model: usedAttempt.userModelId,
           report: finishReport,
           costUsd,
-          extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+          extraParts: metricsDetailed
+            ? mergeOptionalParts(
+                buildDetailedMetricsParts(finishReport),
+                buildDetailedLengthPartsForExtracted(extracted)
+              )
+            : null,
           color: verboseColor,
         })
       }
@@ -3512,7 +3514,6 @@ export async function runCli(
     }
 
     const report = shouldComputeReport ? await buildReport() : null
-    if (metricsDetailed && report) writeMetricsReport(report)
     if (metricsEnabled && report) {
       const costUsd = await estimateCostUsd()
       writeFinishLine({
@@ -3521,7 +3522,12 @@ export async function runCli(
         model: modelMeta.canonical,
         report,
         costUsd,
-        extraParts: metricsDetailed ? buildDetailedLengthPartsForExtracted(extracted) : null,
+        extraParts: metricsDetailed
+          ? mergeOptionalParts(
+              buildDetailedMetricsParts(report),
+              buildDetailedLengthPartsForExtracted(extracted)
+            )
+          : null,
         color: verboseColor,
       })
     }
