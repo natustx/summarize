@@ -16,6 +16,8 @@ type GenerateFreeOptions = {
   minParamB: number
 }
 
+type RateLimitKind = 'perMin' | 'perDay'
+
 function supportsColor(
   stream: NodeJS.WritableStream,
   env: Record<string, string | undefined>
@@ -56,6 +58,19 @@ function inferParamBFromIdOrName(text: string): number | null {
     if (best === null || value > best) best = value
   }
   return best
+}
+
+function classifyOpenRouterRateLimit(message: string): RateLimitKind | null {
+  const m = message.toLowerCase()
+  if (!m.includes('rate limit exceeded')) return null
+  if (m.includes('per-day') || m.includes('per day') || m.includes('free-models-per-day')) {
+    return 'perDay'
+  }
+  if (m.includes('per-min') || m.includes('per min') || m.includes('free-models-per-min')) {
+    return 'perMin'
+  }
+  // Default: assume per-minute (most common for free models).
+  return 'perMin'
 }
 
 function assertNoComments(raw: string, path: string): void {
@@ -334,11 +349,12 @@ export async function generateFree({
   let done = 0
   let okCount = 0
   const failureCounts: Record<
-    'empty' | 'rateLimit' | 'noProviders' | 'timeout' | 'providerError' | 'other',
+    'empty' | 'rateLimitMin' | 'rateLimitDay' | 'noProviders' | 'timeout' | 'providerError' | 'other',
     number
   > = {
     empty: 0,
-    rateLimit: 0,
+    rateLimitMin: 0,
+    rateLimitDay: 0,
     noProviders: 0,
     timeout: 0,
     providerError: 0,
@@ -346,6 +362,11 @@ export async function generateFree({
   }
   const startedAt = Date.now()
   let lastProgressPrint = 0
+
+  // Global cooldown gate for OpenRouter free-model per-minute limits.
+  let cooldownUntilMs = 0
+  let cooldownNotifiedAtMs = 0
+  const COOLDOWN_MS = 65_000
 
   const progress = (label: string) => {
     const now = Date.now()
@@ -374,10 +395,30 @@ export async function generateFree({
   const results: Result[] = []
   const idToMeta = new Map(smartSorted.map((m) => [m.id, m] as const))
 
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+  const waitForCooldown = async () => {
+    const now = Date.now()
+    if (cooldownUntilMs <= now) return
+    const remaining = cooldownUntilMs - now
+    if (now - cooldownNotifiedAtMs > 5_000) {
+      cooldownNotifiedAtMs = now
+      note(`${dim(`rate limit hit; sleeping ${formatMs(remaining)}…`)}`)
+    }
+    await sleep(remaining)
+  }
+
+  const setCooldown = (ms: number) => {
+    const next = Date.now() + ms
+    if (next > cooldownUntilMs) cooldownUntilMs = next
+  }
+
   const classifyFailure = (message: string) => {
     const m = message.toLowerCase()
     if (m.includes('empty summary')) return 'empty'
-    if (m.includes('rate limit exceeded')) return 'rateLimit'
+    const rl = classifyOpenRouterRateLimit(message)
+    if (rl === 'perMin') return 'rateLimitMin'
+    if (rl === 'perDay') return 'rateLimitDay'
     if (m.includes('no allowed providers are available')) return 'noProviders'
     if (m.includes('timed out') || m.includes('timeout') || m.includes('aborted')) return 'timeout'
     if (m.includes('provider returned error') || m.includes('provider error')) return 'providerError'
@@ -389,6 +430,7 @@ export async function generateFree({
     const batchResults = await mapWithConcurrency(freeIds, CONCURRENCY, async (openrouterModelId) => {
       const runStartedAt = Date.now()
       try {
+        await waitForCooldown()
         await generateTextWithModelId({
           modelId: `openai/${openrouterModelId}`,
           apiKeys,
@@ -427,6 +469,48 @@ export async function generateFree({
         const message = error instanceof Error ? error.message : String(error)
         const kind = classifyFailure(message)
         failureCounts[kind] += 1
+        if (kind === 'rateLimitMin') {
+          // Back off globally and retry once.
+          setCooldown(COOLDOWN_MS)
+          await waitForCooldown()
+          try {
+            const retryStartedAt = Date.now()
+            await generateTextWithModelId({
+              modelId: `openai/${openrouterModelId}`,
+              apiKeys,
+              prompt: 'Reply with a single word: OK',
+              temperature: 0,
+              maxOutputTokens: 16,
+              timeoutMs: TIMEOUT_MS,
+              fetchImpl,
+              forceOpenRouter: true,
+              retries: 0,
+            })
+            const retryLatencyMs = Date.now() - retryStartedAt
+            done += 1
+            okCount += 1
+            progress('tested')
+            const meta = idToMeta.get(openrouterModelId) ?? null
+            note(`${okLabel('ok')} ${openrouterModelId} ${dim(`(${formatMs(retryLatencyMs)})`)}`)
+            return {
+              ok: true,
+              value: {
+                openrouterModelId,
+                initialLatencyMs: retryLatencyMs,
+                medianLatencyMs: retryLatencyMs,
+                totalLatencyMs: retryLatencyMs,
+                successCount: 1,
+                contextLength: meta?.contextLength ?? null,
+                maxCompletionTokens: meta?.maxCompletionTokens ?? null,
+                supportedParametersCount: meta?.supportedParametersCount ?? 0,
+                modality: meta?.modality ?? null,
+                inferredParamB: meta?.inferredParamB ?? null,
+              },
+            } satisfies Result
+          } catch (retryError) {
+            // fall through to failure handling below
+          }
+        }
         done += 1
         progress('tested')
         if (verbose) {
@@ -460,10 +544,13 @@ export async function generateFree({
         .map(([k, v]) => `${k}=${v}`),
     ]
     stderr.write(`${heading('OpenRouter')}: results ${parts.join(' ')}\n`)
-    if (failureCounts.rateLimit > 0) {
+    if (failureCounts.rateLimitMin > 0) {
       stderr.write(
         `${dim('Note: OpenRouter free-model rate limits were hit; retrying later may find more working models.')}\n`
       )
+    }
+    if (failureCounts.rateLimitDay > 0) {
+      stderr.write(`${dim('Note: OpenRouter per-day free-model quota was hit.')}\n`)
     }
   }
 
