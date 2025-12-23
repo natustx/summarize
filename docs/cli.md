@@ -20,7 +20,7 @@ Why: CLI adds ~4s latency per attempt and higher variance.
 Gemini CLI performance: summarize sets `GEMINI_CLI_NO_RELAUNCH=true` for Gemini CLI runs to avoid a costly self-relaunch (can be overridden by setting it yourself).
 
 When enabled, auto prepends CLI attempts in the order listed in `cli.enabled`
-(recommended order: `["claude","gemini","codex"]`).
+(recommended order: `["gemini","claude","codex"]`).
 
 Enable CLI attempts:
 

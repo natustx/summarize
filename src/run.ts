@@ -1117,7 +1117,7 @@ export async function runCli(
   const cliEnabledOverride: CliProvider[] | null = (() => {
     if (!cliFlagPresent || cliProviderArg) return null
     if (Array.isArray(config?.cli?.enabled)) return config.cli.enabled
-    return ['claude', 'gemini', 'codex']
+    return ['gemini', 'claude', 'codex']
   })()
   const cliConfigForRun = cliEnabledOverride
     ? { ...(config?.cli ?? {}), enabled: cliEnabledOverride }

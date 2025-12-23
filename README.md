@@ -140,7 +140,7 @@ Why: CLI adds ~4s latency per attempt and higher variance.
 Shortcut: `--cli` (with no provider) uses auto selection with CLI enabled.
 
 When enabled, auto prepends CLI attempts in the order listed in `cli.enabled`
-(recommended order: `["claude","gemini","codex"]`), then tries the native provider candidates
+(recommended order: `["gemini","claude","codex"]`), then tries the native provider candidates
 (with OpenRouter fallbacks when configured).
 
 Enable CLI attempts:
