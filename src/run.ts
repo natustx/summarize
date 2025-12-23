@@ -1463,7 +1463,7 @@ export async function runCli(
     ) {
       return null
     }
-    // Rough heuristic; used only for the "skip model when input is shorter than requested output" rule.
+    // Rough heuristic (chars → tokens). Used for auto selection + cost estimation.
     return Math.max(16, Math.ceil(targetChars / 4))
   })()
 
@@ -2032,78 +2032,6 @@ export async function runCli(
           ? ('text' as const)
           : ('file' as const)
     const requiresVideoUnderstanding = kind === 'video' && videoMode !== 'transcript'
-    const extractedTextForNoModel =
-      kind === 'text'
-        ? usingPreprocessedMarkdown
-          ? preprocessedMarkdown
-          : (textContent?.content ?? null)
-        : null
-
-    if (
-      requestedModel.kind === 'auto' &&
-      typeof desiredOutputTokens === 'number' &&
-      typeof extractedTextForNoModel === 'string' &&
-      extractedTextForNoModel.trim().length > 0 &&
-      countTokens(extractedTextForNoModel) <= desiredOutputTokens
-    ) {
-      clearProgressForStdout()
-      if (json) {
-        const finishReport = shouldComputeReport ? await buildReport() : null
-        const input: JsonOutput['input'] =
-          sourceKind === 'file'
-            ? {
-                kind: 'file',
-                filePath: sourceLabel,
-                timeoutMs,
-                length:
-                  lengthArg.kind === 'preset'
-                    ? { kind: 'preset', preset: lengthArg.preset }
-                    : { kind: 'chars', maxCharacters: lengthArg.maxCharacters },
-                maxOutputTokens: maxOutputTokensArg,
-                model: requestedModelLabel,
-              }
-            : {
-                kind: 'asset-url',
-                url: sourceLabel,
-                timeoutMs,
-                length:
-                  lengthArg.kind === 'preset'
-                    ? { kind: 'preset', preset: lengthArg.preset }
-                    : { kind: 'chars', maxCharacters: lengthArg.maxCharacters },
-                maxOutputTokens: maxOutputTokensArg,
-                model: requestedModelLabel,
-              }
-        const payload: JsonOutput = {
-          input,
-          env: {
-            hasXaiKey: Boolean(xaiApiKey),
-            hasOpenAIKey: Boolean(apiKey),
-            hasOpenRouterKey: Boolean(openrouterApiKey),
-            hasApifyToken: Boolean(apifyToken),
-            hasFirecrawlKey: firecrawlConfigured,
-            hasGoogleKey: googleConfigured,
-            hasAnthropicKey: anthropicConfigured,
-          },
-          extracted: {
-            kind: 'asset',
-            source: sourceLabel,
-            mediaType: attachment.mediaType,
-            filename: attachment.filename,
-          },
-          prompt: promptText,
-          llm: null,
-          metrics: metricsEnabled ? finishReport : null,
-          summary: extractedTextForNoModel.trim(),
-        }
-        stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
-        return
-      }
-
-      stdout.write(`${extractedTextForNoModel.trim()}\n`)
-      writeViaFooter(assetFooterParts)
-      return
-    }
-
     const attempts: ModelAttempt[] = await (async () => {
       if (isFallbackModel) {
         const catalog = await getLiteLlmCatalog()
@@ -3274,68 +3202,6 @@ export async function runCli(
     }
 
     const promptTokens = countTokens(prompt)
-
-    if (
-      requestedModel.kind === 'auto' &&
-      typeof desiredOutputTokens === 'number' &&
-      extracted.content.trim().length > 0 &&
-      countTokens(extracted.content) <= desiredOutputTokens
-    ) {
-      clearProgressForStdout()
-      if (json) {
-        const finishReport = shouldComputeReport ? await buildReport() : null
-        const payload: JsonOutput = {
-          input: {
-            kind: 'url',
-            url,
-            timeoutMs,
-            youtube: youtubeMode,
-            firecrawl: firecrawlMode,
-            format,
-            markdown: effectiveMarkdownMode,
-            length:
-              lengthArg.kind === 'preset'
-                ? { kind: 'preset', preset: lengthArg.preset }
-                : { kind: 'chars', maxCharacters: lengthArg.maxCharacters },
-            maxOutputTokens: maxOutputTokensArg,
-            model: requestedModelLabel,
-          },
-          env: {
-            hasXaiKey: Boolean(xaiApiKey),
-            hasOpenAIKey: Boolean(apiKey),
-            hasOpenRouterKey: Boolean(openrouterApiKey),
-            hasApifyToken: Boolean(apifyToken),
-            hasFirecrawlKey: firecrawlConfigured,
-            hasGoogleKey: googleConfigured,
-            hasAnthropicKey: anthropicConfigured,
-          },
-          extracted,
-          prompt,
-          llm: null,
-          metrics: metricsEnabled ? finishReport : null,
-          summary: extracted.content,
-        }
-        if (metricsDetailed && finishReport) {
-          writeMetricsReport(finishReport)
-        }
-        stdout.write(`${JSON.stringify(payload, null, 2)}\n`)
-        if (metricsEnabled && finishReport) {
-          const costUsd = await estimateCostUsd()
-          writeFinishLine({
-            stderr,
-            elapsedMs: Date.now() - runStartedAtMs,
-            model: requestedModelLabel,
-            report: finishReport,
-            costUsd,
-            color: verboseColor,
-          })
-        }
-        return
-      }
-      stdout.write(`${extracted.content}\n`)
-      writeViaFooter(footerBaseParts)
-      return
-    }
 
     const kindForAuto = isYouTube ? ('youtube' as const) : ('website' as const)
     const attempts: ModelAttempt[] = await (async () => {

@@ -38,7 +38,6 @@
   - YouTube embeds switch to transcript extraction automatically.
   - Direct video URLs can be downloaded + summarized when `--video-mode auto|understand` and a Gemini key is available.
 - `.env` in the current directory is loaded automatically (so API keys work without exporting env vars).
-- Shortcut: when extracted input tokens are <= requested output tokens, the CLI prints extracted text directly (no LLM call).
 
 ### Fixes
 

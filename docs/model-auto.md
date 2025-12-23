@@ -9,15 +9,9 @@ This is also the built-in default when you don’t specify a model.
 - Builds an ordered list of model “attempts” from `candidates[]` (native first, optional OpenRouter fallback).
 - Skips attempts that don’t have the required API key configured.
 - On any request error, tries the next attempt.
-- If no model is usable, prints the extracted text (no LLM summary).
+- If no model is usable, prints the extracted text (no LLM summary). Use `--extract` if you want the raw extracted content even when models are available.
 - Auto prepends CLI attempts only when `cli.enabled` is set (see `docs/cli.md`).
   - Order follows `cli.enabled`.
-
-## “No model needed” shortcut
-
-If the extracted text is already shorter than (or roughly equal to) the requested output size, `--model auto` prints the extracted text directly.
-
-You’ll still see a `via …` footer when non-trivial extraction happened (Firecrawl, markitdown, YouTube transcript, Whisper, etc.).
 
 ## OpenRouter vs native
 
