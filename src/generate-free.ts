@@ -176,6 +176,7 @@ export async function generateFree({
 }): Promise<void> {
   const color = supportsColor(stderr, env)
   const okLabel = (text: string) => ansi('1;32', text, color)
+  const failLabel = (text: string) => ansi('1;31', text, color)
   const dim = (text: string) => ansi('2', text, color)
   const heading = (text: string) => ansi('1;36', text, color)
 
@@ -275,6 +276,13 @@ export async function generateFree({
     stderr.write(
       `${heading('OpenRouter')}: filtered ${filteredCount}/${freeModelsAll.length} small models (<${MIN_PARAM_B}B)\n`
     )
+    if (verbose) {
+      const filteredIds = freeModelsAll
+        .filter((m) => m.inferredParamB !== null && m.inferredParamB < MIN_PARAM_B)
+        .map((m) => m.id)
+        .sort((a, b) => a.localeCompare(b))
+      for (const id of filteredIds) stderr.write(`${dim(`skip ${id}`)}\n`)
+    }
   }
 
   const smartSorted = freeModels
@@ -323,6 +331,17 @@ export async function generateFree({
   const isTty = Boolean((stderr as unknown as { isTTY?: boolean }).isTTY)
   let done = 0
   let okCount = 0
+  const failureCounts: Record<
+    'empty' | 'rateLimit' | 'noProviders' | 'timeout' | 'providerError' | 'other',
+    number
+  > = {
+    empty: 0,
+    rateLimit: 0,
+    noProviders: 0,
+    timeout: 0,
+    providerError: 0,
+    other: 0,
+  }
   const startedAt = Date.now()
   let lastProgressPrint = 0
 
@@ -352,6 +371,16 @@ export async function generateFree({
 
   const results: Result[] = []
   const idToMeta = new Map(smartSorted.map((m) => [m.id, m] as const))
+
+  const classifyFailure = (message: string) => {
+    const m = message.toLowerCase()
+    if (m.includes('empty summary')) return 'empty'
+    if (m.includes('rate limit exceeded')) return 'rateLimit'
+    if (m.includes('no allowed providers are available')) return 'noProviders'
+    if (m.includes('timed out') || m.includes('timeout') || m.includes('aborted')) return 'timeout'
+    if (m.includes('provider returned error') || m.includes('provider error')) return 'providerError'
+    return 'other'
+  }
 
   // Pass 1: test all free models once.
   {
@@ -394,9 +423,13 @@ export async function generateFree({
         } satisfies Result
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        const kind = classifyFailure(message)
+        failureCounts[kind] += 1
         done += 1
         progress('tested')
-        if (verbose) stderr.write(`${isTty ? '\n' : ''}fail ${openrouterModelId}: ${message}\n`)
+        if (verbose) {
+          note(`${failLabel('fail')} ${openrouterModelId} ${dim(`(${kind})`)}: ${message}`)
+        }
         return { ok: false, openrouterModelId, error: message } satisfies Result
       }
     })
@@ -413,6 +446,23 @@ export async function generateFree({
 
   if (ok.length === 0) {
     throw new Error(`No working :free models found (tested ${results.length})`)
+  }
+
+  {
+    const failed = results.length - ok.length
+    const parts = [
+      `ok=${ok.length}`,
+      `failed=${failed}`,
+      ...Object.entries(failureCounts)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => `${k}=${v}`),
+    ]
+    stderr.write(`${heading('OpenRouter')}: results ${parts.join(' ')}\n`)
+    if (failureCounts.rateLimit > 0) {
+      stderr.write(
+        `${dim('Note: OpenRouter free-model rate limits were hit; retrying later may find more working models.')}\n`
+      )
+    }
   }
 
   const buildSelection = (working: Ok[]) => {

@@ -1178,6 +1178,9 @@ export async function runCli(
   ;(globalThis as unknown as { AI_SDK_LOG_WARNINGS?: boolean }).AI_SDK_LOG_WARNINGS = false
 
   const normalizedArgv = argv.filter((arg) => arg !== '--')
+  if (normalizedArgv[0]?.toLowerCase() === 'generate-free') {
+    throw new Error('Command renamed: use "summarize refresh-free" (no backwards compatibility).')
+  }
   if (normalizedArgv[0]?.toLowerCase() === 'refresh-free') {
     const verbose = normalizedArgv.includes('--verbose') || normalizedArgv.includes('--debug')
     const help =
