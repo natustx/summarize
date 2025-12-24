@@ -1173,6 +1173,7 @@ function formatModelLabelForDisplay(model: string): string {
   return trimmed
 }
 
+
 function writeFinishLine({
   stderr,
   elapsedMs,
@@ -1213,11 +1214,10 @@ function writeFinishLine({
     compactTranscriptLabel && extraParts
       ? extraParts.filter((part) => part !== compactTranscript)
       : extraParts
-
   const summaryParts: Array<string | null> = [
     formatElapsedMs(elapsedMs),
-    costUsd != null ? formatUSD(costUsd) : null,
     compactTranscriptLabel,
+    costUsd != null ? formatUSD(costUsd) : null,
     formatModelLabelForDisplay(model),
     tokensPart,
   ]
@@ -2555,6 +2555,7 @@ export async function runCli(
         })
         return filtered
       }
+      /* v8 ignore next */
       if (!fixedModelSpec) {
         throw new Error('Internal error: missing fixed model spec')
       }
@@ -3678,6 +3679,7 @@ export async function runCli(
           return { ...attempt, cliProvider: parsed.provider, cliModel: parsed.model }
         })
       }
+      /* v8 ignore next */
       if (!fixedModelSpec) {
         throw new Error('Internal error: missing fixed model spec')
       }

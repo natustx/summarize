@@ -22,7 +22,7 @@
   - Add `zai/...` model alias with Z.AI base URL + chat completions by default.
   - Add `OPENAI_USE_CHAT_COMPLETIONS` + `openai.useChatCompletions` config toggle.
 - **Metrics / output**
-  - `--metrics on` shows transcript length; `--metrics detailed` shows transcript duration/words + transcription source/provider; hides `calls=1`.
+  - `--metrics on`: finish line includes transcript words + media duration (when available); `--metrics detailed`: adds input/transcript sizes + transcript source/provider/cache; hides `calls=1`.
   - Smarter duration formatting (`1h 13m 4s`, `44s`) and rounded transfer rates.
   - Make Markdown links terminal-clickable by materializing URLs.
   - `--metrics on` now renders a single finish line with a compact transcript block (… words, …) before the model.
