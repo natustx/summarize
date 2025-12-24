@@ -1358,11 +1358,14 @@ function buildCompactTranscriptPart(extracted: Parameters<typeof buildDetailedLe
   const transcriptWords = extracted.transcriptWordCount ?? wordEstimate
   const minutesEstimate = Math.max(1, Math.round(transcriptWords / 160))
 
-  const durationIsExact =
+  const exactDurationSeconds =
     typeof extracted.mediaDurationSeconds === 'number' && extracted.mediaDurationSeconds > 0
-  const duration = durationIsExact
-    ? formatDurationSecondsSmart(extracted.mediaDurationSeconds)
-    : `~${formatDurationSecondsSmart(minutesEstimate * 60)}`
+      ? extracted.mediaDurationSeconds
+      : null
+  const duration =
+    exactDurationSeconds != null
+      ? formatDurationSecondsSmart(exactDurationSeconds)
+      : `~${formatDurationSecondsSmart(minutesEstimate * 60)}`
 
   const wordLabel = `${formatCompactCount(transcriptWords)} words`
 
