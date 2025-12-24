@@ -30,6 +30,7 @@ async function importPodcastProvider({ ffmpegAvailable }: { ffmpegAvailable: boo
   vi.doMock('../src/transcription/whisper.js', () => ({
     MAX_OPENAI_UPLOAD_BYTES: 25 * 1024 * 1024,
     isFfmpegAvailable: async () => ffmpegAvailable,
+    isWhisperCppReady: () => Promise.resolve(false),
     probeMediaDurationSecondsWithFfprobe: async () => null,
     transcribeMediaWithWhisper,
     transcribeMediaFileWithWhisper,

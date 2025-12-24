@@ -97,6 +97,6 @@ describe('link preview extraction (YouTube mode)', () => {
       client.fetchLinkContent('https://www.youtube.com/watch?v=abcdefghijk', {
         youtubeTranscript: 'yt-dlp',
       })
-    ).rejects.toThrow(/Missing OPENAI_API_KEY or FAL_KEY/)
+    ).rejects.toThrow(/Missing transcription provider for --youtube yt-dlp/i)
   })
 })

@@ -170,6 +170,6 @@ describe('YouTube transcript provider module', () => {
           openaiApiKey: null,
         }
       )
-    ).rejects.toThrow('Missing OPENAI_API_KEY or FAL_KEY')
+    ).rejects.toThrow(/Missing transcription provider for --youtube yt-dlp/i)
   })
 })

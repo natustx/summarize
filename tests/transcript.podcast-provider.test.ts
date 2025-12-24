@@ -23,7 +23,7 @@ describe('podcast transcript provider module', () => {
     expect(result.source).toBeNull()
     expect(result.attemptedProviders).toEqual([])
     expect(result.metadata?.reason).toBe('missing_transcription_keys')
-    expect(result.notes).toContain('Missing OPENAI_API_KEY')
+    expect(result.notes).toContain('Missing transcription provider')
   })
 
   it('extracts RSS enclosure URL and decodes &amp;', async () => {

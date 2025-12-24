@@ -130,6 +130,42 @@ describe('transcription/whisper', () => {
     }
   })
 
+  it.each([
+    { mediaType: 'audio/x-wav', filename: 'audio', expected: 'audio.wav' },
+    { mediaType: 'audio/wav', filename: 'audio', expected: 'audio.wav' },
+    { mediaType: 'audio/flac', filename: 'audio', expected: 'audio.flac' },
+    { mediaType: 'audio/webm', filename: 'audio', expected: 'audio.webm' },
+    { mediaType: 'audio/mpeg', filename: 'audio', expected: 'audio.mp3' },
+  ])('maps $mediaType to $expected for Whisper format detection', async (row) => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const form = init?.body as FormData
+      const file = form.get('file') as unknown as { name?: unknown }
+      if (typeof file?.name !== 'string') throw new Error('expected file.name')
+      expect(file.name).toBe(row.expected)
+      return new Response(JSON.stringify({ text: 'ok' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    try {
+      vi.stubGlobal('fetch', fetchMock)
+      const { transcribeMediaWithWhisper } = await import('../src/transcription/whisper.js')
+      const result = await transcribeMediaWithWhisper({
+        bytes: new Uint8Array([1, 2, 3]),
+        mediaType: row.mediaType,
+        filename: row.filename,
+        openaiApiKey: 'OPENAI',
+        falApiKey: null,
+      })
+
+      expect(result.text).toBe('ok')
+      expect(result.provider).toBe('openai')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('returns an error when no transcription keys are provided', async () => {
     const { transcribeMediaWithWhisper } = await import('../src/transcription/whisper.js')
     const result = await transcribeMediaWithWhisper({
