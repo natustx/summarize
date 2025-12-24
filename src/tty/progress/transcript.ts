@@ -93,10 +93,7 @@ export function createTranscriptProgressRenderer({
 
   const renderWhisperLine = () => {
     const provider = formatProvider(state.whisperProviderHint)
-    const providerLabel =
-      state.whisperModelId && state.whisperProviderHint !== 'cpp'
-        ? `${provider}, ${state.whisperModelId}`
-        : provider
+    const providerLabel = state.whisperModelId ? `${provider}, ${state.whisperModelId}` : provider
     const svc =
       state.service === 'podcast' ? 'podcast' : state.service === 'youtube' ? 'youtube' : 'media'
     const elapsedMs = typeof state.startedAtMs === 'number' ? Date.now() - state.startedAtMs : 0

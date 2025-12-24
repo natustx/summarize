@@ -122,7 +122,7 @@ describe('tty transcript progress renderer', () => {
     vi.useRealTimers()
   })
 
-  it('prefers whisper.cpp label without model suffix', () => {
+  it('renders whisper.cpp label with model name', () => {
     vi.useFakeTimers()
     vi.setSystemTime(5_000)
 
@@ -134,13 +134,12 @@ describe('tty transcript progress renderer', () => {
       url: 'https://example.com',
       service: 'podcast',
       providerHint: 'cpp',
-      modelId: 'whisper.cpp',
+      modelId: 'base',
       totalDurationSeconds: 10,
       parts: null,
     })
     const line = setText.mock.calls.at(-1)?.[0] ?? ''
-    expect(line).toContain('Whisper.cpp')
-    expect(line).not.toContain('whisper.cpp,')
+    expect(line).toContain('Whisper.cpp, base')
 
     vi.useRealTimers()
   })
