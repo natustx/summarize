@@ -4,43 +4,56 @@
 
 ### Features
 
-- Automatic model selection (`--model auto`, now the default):
-  - Chooses models based on input kind (website/YouTube/file/image/video/text) and prompt size.
-  - Skips candidates without API keys; retries next model on request errors.
-  - Adds OpenRouter fallback attempts when `OPENROUTER_API_KEY` is present.
-  - Shows the chosen model in the progress UI.
-- Add `--cli <provider>` flag (equivalent to `--model cli/<provider>`).
-- `--cli` accepts case-insensitive providers and can be used without a provider to enable CLI auto selection.
-- Named model presets via config (`~/.summarize/config.json` → `models`), selectable as `--model <preset>`.
-- Built-in preset: `--model free` (OpenRouter `:free` candidates; override via `models.free`).
-- `summarize refresh-free` regenerates `models.free` by scanning OpenRouter `:free` models and testing availability + latency.
-- `summarize refresh-free --set-default` also sets `"model": "free"` in `~/.summarize/config.json` (so free becomes your default).
-- Website extraction detects video-only pages:
-  - YouTube embeds switch to transcript extraction automatically.
-  - Direct video URLs can be downloaded + summarized when `--video-mode auto|understand` and a Gemini key is available.
-- `.env` in the current directory is loaded automatically (so API keys work without exporting env vars).
+- **Model selection & presets**
+  - Automatic model selection (`--model auto`, now the default):
+    - Chooses models based on input kind (website/YouTube/file/image/video/text) and prompt size.
+    - Skips candidates without API keys; retries next model on request errors.
+    - Adds OpenRouter fallback attempts when `OPENROUTER_API_KEY` is present.
+    - Shows the chosen model in the progress UI.
+  - Named model presets via config (`~/.summarize/config.json` → `models`), selectable as `--model <preset>`.
+  - Built-in preset: `--model free` (OpenRouter `:free` candidates; override via `models.free`).
+- **OpenRouter free preset maintenance**
+  - `summarize refresh-free` regenerates `models.free` by scanning OpenRouter `:free` models and testing availability + latency.
+  - `summarize refresh-free --set-default` also sets `"model": "free"` in `~/.summarize/config.json` (so free becomes your default).
+- **CLI models**
+  - Add `--cli <provider>` flag (equivalent to `--model cli/<provider>`).
+  - `--cli` accepts case-insensitive providers and can be used without a provider to enable CLI auto selection.
+- **Content extraction**
+  - Website extraction detects video-only pages:
+    - YouTube embeds switch to transcript extraction automatically.
+    - Direct video URLs can be downloaded + summarized when `--video-mode auto|understand` and a Gemini key is available.
+- **Env**
+  - `.env` in the current directory is loaded automatically (so API keys work without exporting env vars).
 
 ### Changes
 
-- CLI config: auto mode uses CLI models only when `cli.enabled` is set; order follows the list.
-- `cli.enabled` is an allowlist for CLI usage.
-- OpenRouter: stop sending extra routing headers.
-- Default summary length is now `xl`.
-- `--model free`: when OpenRouter rejects routing with “No allowed providers”, print the exact provider names to allow and suggest running `summarize refresh-free`.
-- `--max-output-tokens`: when explicitly set, it is also forwarded to OpenRouter calls.
-- `summarize refresh-free`: default extra runs reduced to 2 (total runs = 1 + runs) to reduce rate-limit pressure.
-- `summarize refresh-free`: filter `:free` candidates by recency (default: last 180 days; configurable via `--max-age-days`).
-- `summarize refresh-free`: print `ctx`/`out` in `k` units for readability.
+- **CLI config**
+  - Auto mode uses CLI models only when `cli.enabled` is set; order follows the list.
+  - `cli.enabled` is an allowlist for CLI usage.
+- **OpenRouter**
+  - Stop sending extra routing headers.
+  - `--model free`: when OpenRouter rejects routing with “No allowed providers”, print the exact provider names to allow and suggest running `summarize refresh-free`.
+  - `--max-output-tokens`: when explicitly set, it is also forwarded to OpenRouter calls.
+- **Refresh Free**
+  - Default extra runs reduced to 2 (total runs = 1 + runs) to reduce rate-limit pressure.
+  - Filter `:free` candidates by recency (default: last 180 days; configurable via `--max-age-days`).
+  - Print `ctx`/`out` in `k` units for readability.
+- **Defaults**
+  - Default summary length is now `xl`.
 
 ### Fixes
 
-- LLM request retries (`--retries`) and clearer timeout errors.
-- Streaming output: normalize + de-dupe overlapping chunks to prevent repeated sections in live Markdown output.
-- YouTube captions: prefer manual captions over auto-generated when both exist. Thanks @dougvk.
-- Always summarize YouTube transcripts in auto mode (instead of printing the transcript).
-- Prompting: don’t “pad” beyond input length when asking for longer summaries.
-- `--metrics detailed`: fold metrics into finish line and make labels less cryptic.
-- `summarize refresh-free`: detect OpenRouter free-model rate limits and back off + retry.
+- **LLM / OpenRouter**
+  - LLM request retries (`--retries`) and clearer timeout errors.
+  - `summarize refresh-free`: detect OpenRouter free-model rate limits and back off + retry.
+- **Streaming**
+  - Normalize + de-dupe overlapping chunks to prevent repeated sections in live Markdown output.
+- **YouTube**
+  - Prefer manual captions over auto-generated when both exist. Thanks @dougvk.
+  - Always summarize YouTube transcripts in auto mode (instead of printing the transcript).
+- **Prompting & metrics**
+  - Don’t “pad” beyond input length when asking for longer summaries.
+  - `--metrics detailed`: fold metrics into finish line and make labels less cryptic.
 
 ### Docs
 
