@@ -614,7 +614,9 @@ describe('transcription/whisper', () => {
       spawn: (_cmd: string, args: string[]) => {
         if (_cmd !== 'ffmpeg') throw new Error(`Unexpected spawn: ${_cmd}`)
 
-        const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+        const stderr = new EventEmitter() as EventEmitter & {
+          setEncoding?: (encoding: string) => void
+        }
         stderr.setEncoding = () => {}
 
         const handlers = new Map<string, (value?: unknown) => void>()
@@ -676,7 +678,9 @@ describe('transcription/whisper', () => {
       vi.doMock('node:child_process', () => ({
         spawn: (_cmd: string, args: string[]) => {
           if (_cmd !== 'ffmpeg') throw new Error(`Unexpected spawn: ${_cmd}`)
-          const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+          const stderr = new EventEmitter() as EventEmitter & {
+            setEncoding?: (encoding: string) => void
+          }
           stderr.setEncoding = () => {}
 
           const handlers = new Map<string, (value?: unknown) => void>()

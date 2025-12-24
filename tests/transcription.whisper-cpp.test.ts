@@ -100,7 +100,9 @@ describe('transcription/whisper local whisper.cpp', () => {
       spawn: (_cmd: string, args: string[]) => {
         if (_cmd !== 'whisper-cli') throw new Error(`Unexpected spawn: ${_cmd}`)
 
-        const stderr = new EventEmitter() as EventEmitter & { setEncoding?: (encoding: string) => void }
+        const stderr = new EventEmitter() as EventEmitter & {
+          setEncoding?: (encoding: string) => void
+        }
         stderr.setEncoding = () => {}
 
         const handlers = new Map<string, (value?: unknown) => void>()
@@ -207,7 +209,9 @@ describe('transcription/whisper local whisper.cpp', () => {
     expect(
       progress.mock.calls.some(([evt]) => {
         const event = evt as { processedDurationSeconds: number | null }
-        return typeof event.processedDurationSeconds === 'number' && event.processedDurationSeconds > 0
+        return (
+          typeof event.processedDurationSeconds === 'number' && event.processedDurationSeconds > 0
+        )
       })
     ).toBe(true)
   })

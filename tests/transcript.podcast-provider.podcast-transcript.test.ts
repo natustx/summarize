@@ -115,7 +115,10 @@ describe('podcast transcript provider: RSS <podcast:transcript>', () => {
         })
       }
       if (url === feedUrl) {
-        return new Response(feedXml, { status: 200, headers: { 'content-type': 'application/xml' } })
+        return new Response(feedXml, {
+          status: 200,
+          headers: { 'content-type': 'application/xml' },
+        })
       }
       if (url === transcriptUrl) {
         return new Response(
@@ -144,4 +147,3 @@ Hello from VTT
     expect(result.attemptedProviders).toEqual(['podcastTranscript'])
   })
 })
-
