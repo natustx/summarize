@@ -94,4 +94,101 @@ const silentStderr = new Writable({
     },
     timeoutMs
   )
+
+  it(
+    'podchaser episode prefers description-sized content',
+    async () => {
+      const out = collectStream()
+      await runCli(
+        [
+          '--extract',
+          '--json',
+          '--timeout',
+          '120s',
+          'https://www.podchaser.com/podcasts/aviation-weeks-check-6-podcast-26817/episodes/check-6-revisits-rtxs-pratt-wh-276449881',
+        ],
+        {
+          fetch: globalThis.fetch.bind(globalThis),
+          stdout: out.stream,
+          stderr: silentStderr,
+          env: process.env,
+        }
+      )
+
+      const payload = JSON.parse(out.getText()) as {
+        extracted?: { content?: string; description?: string }
+      }
+      const description = payload.extracted?.description ?? ''
+      const content = payload.extracted?.content ?? ''
+      expect(description.length).toBeGreaterThan(120)
+      expect(content).toContain(description.slice(0, 80))
+      expect(content.length).toBeLessThan(description.length + 80)
+    },
+    timeoutMs
+  )
+
+  it(
+    'spreaker episode prefers description-sized content',
+    async () => {
+      const out = collectStream()
+      await runCli(
+        [
+          '--extract',
+          '--json',
+          '--timeout',
+          '120s',
+          'https://www.spreaker.com/episode/christmas-eve-by-the-campfire-gratitude-reflection-the-rv-life--69193832',
+        ],
+        {
+          fetch: globalThis.fetch.bind(globalThis),
+          stdout: out.stream,
+          stderr: silentStderr,
+          env: process.env,
+        }
+      )
+
+      const payload = JSON.parse(out.getText()) as {
+        extracted?: { content?: string; description?: string }
+      }
+      const description = payload.extracted?.description ?? ''
+      const content = payload.extracted?.content ?? ''
+      expect(description.length).toBeGreaterThan(60)
+      expect(content).toContain(description.slice(0, 50))
+      expect(content.length).toBeLessThan(description.length + 80)
+    },
+    timeoutMs
+  )
+
+  it(
+    'buzzsprout episode prefers description-sized content',
+    async () => {
+      const out = collectStream()
+      await runCli(
+        [
+          '--extract',
+          '--json',
+          '--timeout',
+          '120s',
+          'https://www.buzzsprout.com/2449647/episodes/18377889-2025-in-review-lessons-learned-in-gratitude-anxiety-growth-confidence-self-worth-bravery-self-compassion-and-so-much-more',
+        ],
+        {
+          fetch: globalThis.fetch.bind(globalThis),
+          stdout: out.stream,
+          stderr: silentStderr,
+          env: process.env,
+        }
+      )
+
+      const payload = JSON.parse(out.getText()) as {
+        extracted?: { content?: string; description?: string }
+      }
+      const description = payload.extracted?.description ?? ''
+      const content = payload.extracted?.content ?? ''
+      expect(description.length).toBeGreaterThan(80)
+      expect(content).toContain(description.slice(0, 60))
+      expect(content.length).toBeLessThan(description.length + 80)
+    },
+    timeoutMs
+  )
+
 })

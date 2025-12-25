@@ -18,6 +18,9 @@
 
 ### Changes
 
+- **Transcription**
+  - Add lenient ffmpeg transcode fallback for local Whisper when strict decode fails (e.g. Spotify AAC).
+
 - **Models**
   - Add `zai/...` model alias with Z.AI base URL + chat completions by default.
   - Add `OPENAI_USE_CHAT_COMPLETIONS` + `openai.useChatCompletions` config toggle.
@@ -35,6 +38,8 @@
 
 ### Tests
 
+- Add JSON-LD graph extraction coverage.
+- Extend live podcast-host coverage (Podchaser, Spreaker, Buzzsprout).
 - Raise global branch coverage threshold to 75% and add regression coverage for podcast/language/progress paths.
 
 ## 0.5.0 - 2025-12-24
