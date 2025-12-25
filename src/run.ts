@@ -1581,6 +1581,9 @@ export async function runCli(
   const videoModeExplicitlySet = normalizedArgv.some(
     (arg) => arg === '--video-mode' || arg.startsWith('--video-mode=')
   )
+  const lengthExplicitlySet = normalizedArgv.some(
+    (arg) => arg === '--length' || arg.startsWith('--length=')
+  )
   const lengthArg = parseLengthArg(program.opts().length as string)
   const maxOutputTokensArg = parseMaxOutputTokensArg(
     program.opts().maxOutputTokens as string | undefined
@@ -1600,6 +1603,11 @@ export async function runCli(
   const renderMode = parseRenderMode(program.opts().render as string)
   const debug = Boolean(program.opts().debug)
   const verbose = Boolean(program.opts().verbose) || debug
+
+  if (extractMode && lengthExplicitlySet && !json && isRichTty(stderr)) {
+    stderr.write('Warning: --length is ignored with --extract (no summary is generated).\n')
+  }
+
   const metricsExplicitlySet = normalizedArgv.some(
     (arg) => arg === '--metrics' || arg.startsWith('--metrics=')
   )
