@@ -82,7 +82,7 @@ function buildCompactTranscriptPart(extracted: ExtractedForLengths): string | nu
 
   const mediaKind = inferMediaKindLabelForFinishLine(extracted)
 
-  return mediaKind ? `${duration} ${mediaKind}, ${wordLabel}` : `${duration}, ${wordLabel}`
+  return mediaKind ? `${duration} ${mediaKind} · ${wordLabel}` : `${duration} · ${wordLabel}`
 }
 
 function buildDetailedLengthPartsForExtracted(extracted: ExtractedForLengths): string[] {
@@ -122,7 +122,7 @@ function buildDetailedLengthPartsForExtracted(extracted: ExtractedForLengths): s
         ? formatDurationSecondsSmart(extracted.mediaDurationSeconds)
         : `~${formatDurationSecondsSmart(minutesEstimate * 60)}`
 
-    parts.push(`transcript=${durationPart} (${details.join(', ')})`)
+    parts.push(`transcript=${durationPart} (${details.join(' · ')})`)
   }
 
   const hasTranscript =
@@ -319,11 +319,16 @@ export function buildSummaryFinishLabel(args: {
   if (strategy === 'firecrawl' || args.extracted.diagnostics.firecrawl?.used) {
     sources.push('firecrawl')
   }
+  const transcriptProvided = Boolean(args.extracted.diagnostics.transcript?.textProvided)
   const words =
     typeof args.extracted.wordCount === 'number' && Number.isFinite(args.extracted.wordCount)
       ? args.extracted.wordCount
       : 0
   const wordLabel = words > 0 ? `${formatCompactCount(words)} words` : null
+  if (transcriptProvided) {
+    if (sources.length === 0) return null
+    return `via ${sources.join('+')}`
+  }
   if (sources.length === 0 && !wordLabel) return null
   if (wordLabel && sources.length > 0) return `${wordLabel} via ${sources.join('+')}`
   if (wordLabel) return wordLabel
