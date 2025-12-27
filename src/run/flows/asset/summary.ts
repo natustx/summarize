@@ -1,15 +1,15 @@
 import path from 'node:path'
 import { countTokens } from 'gpt-tokenizer'
 import { render as renderMarkdownAnsi } from 'markdansi'
-import type { CliProvider, SummarizeConfig } from '../../../config.js'
-import type { LlmCall, RunMetricsReport } from '../../../costs.js'
 import {
   buildSummaryCacheKey,
+  type CacheState,
   extractTaggedBlock,
   hashString,
   normalizeContentForHash,
-  type CacheState,
 } from '../../../cache.js'
+import type { CliProvider, SummarizeConfig } from '../../../config.js'
+import type { LlmCall, RunMetricsReport } from '../../../costs.js'
 import type { OutputLanguage } from '../../../language.js'
 import { formatOutputLanguageForJson } from '../../../language.js'
 import { parseGatewayStyleModelId } from '../../../llm/model-id.js'
@@ -35,9 +35,7 @@ import { isRichTty, markdownRenderWidth, supportsColor } from '../../terminal.js
 import type { ModelAttempt } from '../../types.js'
 import { prepareAssetPrompt } from './preprocess.js'
 
-const buildLengthKey = (
-  lengthArg: AssetSummaryContext['lengthArg']
-): string =>
+const buildLengthKey = (lengthArg: AssetSummaryContext['lengthArg']): string =>
   lengthArg.kind === 'preset' ? `preset:${lengthArg.preset}` : `chars:${lengthArg.maxCharacters}`
 
 const buildLanguageKey = (outputLanguage: OutputLanguage): string =>
@@ -282,8 +280,10 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
   let summaryResult: Awaited<ReturnType<typeof ctx.summaryEngine.runSummaryAttempt>> | null = null
   let usedAttempt: ModelAttempt | null = null
   let summaryFromCache = false
+  let cacheChecked = false
 
   if (cacheStore && contentHash && promptHash) {
+    cacheChecked = true
     for (const attempt of attempts) {
       if (!ctx.summaryEngine.envHasKeyFor(attempt.requiredEnv)) continue
       const key = buildSummaryCacheKey({
@@ -295,6 +295,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       })
       const cached = cacheStore.getText('summary', key)
       if (!cached) continue
+      writeVerbose(ctx.stderr, ctx.verbose, 'cache hit summary', ctx.verboseColor)
       args.onModelChosen?.(attempt.userModelId)
       summaryResult = {
         summary: cached,
@@ -306,6 +307,9 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       summaryFromCache = true
       break
     }
+  }
+  if (cacheChecked && !summaryFromCache) {
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache miss summary', ctx.verboseColor)
   }
 
   let lastError: unknown = null
@@ -413,6 +417,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       languageKey,
     })
     cacheStore.setText('summary', key, summaryResult.summary, ctx.cache.ttlMs)
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache write summary', ctx.verboseColor)
   }
 
   const { summary, summaryAlreadyPrinted, modelMeta, maxOutputTokensForCall } = summaryResult

@@ -83,6 +83,7 @@ export function buildProgram() {
     )
     .option('--prompt-file <path>', 'Read the prompt override from a file.', undefined)
     .option('--no-cache', 'Bypass cache reads and writes.')
+    .option('--cache-stats', 'Print cache stats and exit.')
     .option('--clear-cache', 'Delete the cache database and exit.', false)
     .addOption(
       new Option(

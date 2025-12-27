@@ -1,8 +1,8 @@
-import { mkdirSync, rmSync, statSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
 import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
 
-import type { TranscriptCache } from './content/index.js'
+import type { TranscriptCache, TranscriptSource } from './content/index.js'
 
 export type CacheKind = 'extract' | 'summary' | 'transcript'
 
@@ -35,6 +35,23 @@ type CacheRow = {
   size_bytes: number
 }
 
+const TRANSCRIPT_SOURCES: readonly TranscriptSource[] = [
+  'youtubei',
+  'captionTracks',
+  'yt-dlp',
+  'podcastTranscript',
+  'whisper',
+  'apify',
+  'html',
+  'unavailable',
+  'unknown',
+]
+
+function normalizeTranscriptSource(value: unknown): TranscriptSource | null {
+  if (typeof value !== 'string') return null
+  return TRANSCRIPT_SOURCES.includes(value as TranscriptSource) ? (value as TranscriptSource) : null
+}
+
 export type CacheStore = {
   getText: (kind: CacheKind, key: string) => string | null
   getJson: <T>(kind: CacheKind, key: string) => T | null
@@ -53,6 +70,13 @@ export type CacheState = {
   path: string | null
 }
 
+export type CacheStats = {
+  path: string
+  sizeBytes: number
+  totalEntries: number
+  counts: Record<CacheKind, number>
+}
+
 const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined'
 let warningFilterInstalled = false
 
@@ -68,15 +92,10 @@ const installSqliteWarningFilter = () => {
           ? String((warning as { message?: unknown }).message)
           : ''
     const type =
-      typeof args[0] === 'string'
-        ? args[0]
-        : (args[0] as { type?: unknown } | undefined)?.type
+      typeof args[0] === 'string' ? args[0] : (args[0] as { type?: unknown } | undefined)?.type
     const name = (warning as { name?: unknown } | undefined)?.name
     const normalizedType = typeof type === 'string' ? type : typeof name === 'string' ? name : ''
-    if (
-      normalizedType === 'ExperimentalWarning' &&
-      message.toLowerCase().includes('sqlite')
-    ) {
+    if (normalizedType === 'ExperimentalWarning' && message.toLowerCase().includes('sqlite')) {
       return
     }
     return original(warning as never, ...(args as [never]))
@@ -128,9 +147,11 @@ export function resolveCachePath({
 export async function createCacheStore({
   path,
   maxBytes,
+  transcriptNamespace,
 }: {
   path: string
   maxBytes: number
+  transcriptNamespace?: string | null
 }): Promise<CacheStore> {
   ensureDir(dirname(path))
   const db = await openSqlite(path)
@@ -230,7 +251,7 @@ export async function createCacheStore({
     return row.value
   }
 
-  const getJson = <T,>(kind: CacheKind, key: string): T | null => {
+  const getJson = <T>(kind: CacheKind, key: string): T | null => {
     const text = getText(kind, key)
     if (!text) return null
     try {
@@ -259,22 +280,40 @@ export async function createCacheStore({
   }
 
   const close = () => {
+    try {
+      db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch {
+      // ignore
+    }
     db.close?.()
   }
+
+  const normalizedTranscriptNamespace =
+    typeof transcriptNamespace === 'string' && transcriptNamespace.trim().length > 0
+      ? transcriptNamespace.trim()
+      : null
+  const getTranscriptKey = (url: string): string =>
+    buildTranscriptCacheKey({
+      url,
+      namespace: normalizedTranscriptNamespace,
+    })
 
   const transcriptCache: TranscriptCache = {
     get: async ({ url }) => {
       const now = Date.now()
-      const key = hashString(url)
+      const key = getTranscriptKey(url)
       const row = readEntry('transcript', key, now)
       if (!row) return null
       const expired = typeof row.expires_at === 'number' && row.expires_at <= now
-      let payload: { content?: string | null; source?: string | null; metadata?: unknown } | null =
-        null
+      let payload: {
+        content?: string | null
+        source?: TranscriptSource | string | null
+        metadata?: unknown
+      } | null = null
       try {
         payload = JSON.parse(row.value) as {
           content?: string | null
-          source?: string | null
+          source?: TranscriptSource | string | null
           metadata?: unknown
         }
       } catch {
@@ -282,13 +321,13 @@ export async function createCacheStore({
       }
       return {
         content: payload?.content ?? null,
-        source: payload?.source ?? null,
+        source: normalizeTranscriptSource(payload?.source) ?? null,
         expired,
         metadata: (payload?.metadata as Record<string, unknown> | null | undefined) ?? null,
       }
     },
     set: async ({ url, content, source, ttlMs, metadata, service, resourceKey }) => {
-      const key = hashString(url)
+      const key = getTranscriptKey(url)
       setJson(
         'transcript',
         key,
@@ -298,6 +337,8 @@ export async function createCacheStore({
           metadata: metadata ?? null,
           service,
           resourceKey,
+          namespace: normalizedTranscriptNamespace,
+          formatVersion: CACHE_FORMAT_VERSION,
         },
         ttlMs
       )
@@ -366,6 +407,54 @@ export function buildSummaryCacheKey({
     languageKey,
     formatVersion: CACHE_FORMAT_VERSION,
   })
+}
+
+export function buildTranscriptCacheKey({
+  url,
+  namespace,
+  formatVersion,
+}: {
+  url: string
+  namespace: string | null
+  formatVersion?: number
+}): string {
+  return hashJson({
+    url,
+    namespace,
+    formatVersion: formatVersion ?? CACHE_FORMAT_VERSION,
+  })
+}
+
+export async function readCacheStats(path: string): Promise<CacheStats | null> {
+  if (!existsSync(path)) return null
+  const db = await openSqlite(path)
+  try {
+    db.exec('PRAGMA query_only = ON')
+  } catch {
+    // ignore
+  }
+  const counts: Record<CacheKind, number> = {
+    extract: 0,
+    summary: 0,
+    transcript: 0,
+  }
+  const rows = db.prepare('SELECT kind, COUNT(*) AS count FROM cache_entries GROUP BY kind').all()
+  for (const row of rows as Array<{ kind?: string; count?: number }>) {
+    if (row?.kind && typeof row.count === 'number' && row.kind in counts) {
+      counts[row.kind as CacheKind] = row.count
+    }
+  }
+  const totalRow = db.prepare('SELECT COUNT(*) AS count FROM cache_entries').get() as
+    | { count?: number }
+    | undefined
+  const totalEntries = typeof totalRow?.count === 'number' ? totalRow.count : 0
+  db.close?.()
+  return {
+    path,
+    sizeBytes: getSqliteFileSizeBytes(path),
+    totalEntries,
+    counts,
+  }
 }
 
 export function getSqliteFileSizeBytes(path: string): number {

@@ -55,6 +55,8 @@ installed, auto mode can use local CLI models when `cli.enabled` is set (see `do
   - When `--length` is numeric, we add `Output is X characters.` When `--language` is explicitly set, we add `Output should be <language>.`
 - `--no-cache`
   - Bypass cache reads and writes (extracted content, transcripts, summaries).
+- `--cache-stats`
+  - Print cache stats and exit.
 - `--clear-cache`
   - Delete the cache database and exit. Must be used alone.
 - `--video-mode auto|transcript|understand`

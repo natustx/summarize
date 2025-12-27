@@ -1,6 +1,10 @@
-import { loadRemoteAsset } from '../../../content/asset.js'
-import { createLinkPreviewClient, type ExtractedLinkContent } from '../../../content/index.js'
 import { buildExtractCacheKey } from '../../../cache.js'
+import { loadRemoteAsset } from '../../../content/asset.js'
+import {
+  createLinkPreviewClient,
+  type ExtractedLinkContent,
+  type FetchLinkContentOptions,
+} from '../../../content/index.js'
 import { createFirecrawlScraper } from '../../../firecrawl.js'
 import { createOscProgressController } from '../../../tty/osc-progress.js'
 import { startSpinner } from '../../../tty/spinner.js'
@@ -136,7 +140,7 @@ export async function runUrlFlow({
   }
   ctx.setClearProgressBeforeStdout(clearProgressLine)
   try {
-    const buildFetchOptions = () => ({
+    const buildFetchOptions = (): FetchLinkContentOptions => ({
       timeoutMs: ctx.timeoutMs,
       youtubeTranscript: ctx.youtubeMode,
       firecrawl: ctx.firecrawlMode,
@@ -161,7 +165,11 @@ export async function runUrlFlow({
           : null
       if (cacheKey && cacheStore) {
         const cached = cacheStore.getJson<ExtractedLinkContent>('extract', cacheKey)
-        if (cached) return cached
+        if (cached) {
+          writeVerbose(ctx.stderr, ctx.verbose, 'cache hit extract', ctx.verboseColor)
+          return cached
+        }
+        writeVerbose(ctx.stderr, ctx.verbose, 'cache miss extract', ctx.verboseColor)
       }
       const extracted = await fetchLinkContentWithBirdTip({
         client,
@@ -171,6 +179,7 @@ export async function runUrlFlow({
       })
       if (cacheKey && cacheStore) {
         cacheStore.setJson('extract', cacheKey, extracted, ctx.cache.ttlMs)
+        writeVerbose(ctx.stderr, ctx.verbose, 'cache write extract', ctx.verboseColor)
       }
       return extracted
     }
@@ -198,6 +207,15 @@ export async function runUrlFlow({
       verbose: ctx.verbose,
       verboseColor: ctx.verboseColor,
     })
+    const transcriptCacheStatus = extracted.diagnostics?.transcript?.cacheStatus
+    if (transcriptCacheStatus && transcriptCacheStatus !== 'unknown') {
+      writeVerbose(
+        ctx.stderr,
+        ctx.verbose,
+        `cache ${transcriptCacheStatus} transcript`,
+        ctx.verboseColor
+      )
+    }
 
     if (
       ctx.extractMode &&

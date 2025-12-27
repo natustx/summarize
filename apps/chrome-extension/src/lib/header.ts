@@ -13,4 +13,3 @@ export function buildIdleSubtitle({
   const parts = [a, b].filter((p) => p.length > 0)
   return parts.join(' · ')
 }
-

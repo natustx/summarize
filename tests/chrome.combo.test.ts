@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { readPresetOrCustomValue, resolvePresetOrCustom } from '../apps/chrome-extension/src/lib/combo.js'
+import {
+  readPresetOrCustomValue,
+  resolvePresetOrCustom,
+} from '../apps/chrome-extension/src/lib/combo.js'
 
 describe('chrome/combo', () => {
   it('uses preset when value matches (case-insensitive)', () => {
@@ -28,4 +31,3 @@ describe('chrome/combo', () => {
     ).toBe('20k')
   })
 })
-

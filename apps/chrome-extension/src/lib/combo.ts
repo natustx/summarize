@@ -30,4 +30,3 @@ export function readPresetOrCustomValue({
   }
   return presetTrimmed || defaultValue
 }
-

@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import http from 'node:http'
-
+import { formatModelLabelForDisplay } from '../run/finish-line.js'
 import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import type { DaemonConfig } from './config.js'
 import { DAEMON_HOST, DAEMON_PORT_DEFAULT } from './constants.js'
 import { streamSummaryForUrl, streamSummaryForVisiblePage } from './summarize.js'
-import { formatModelLabelForDisplay } from '../run/finish-line.js'
 
 type SessionEvent =
   | {
@@ -260,7 +259,10 @@ export async function runDaemonServer({
               onModelChosen: (modelId: string) => {
                 if (session.lastMeta.model === modelId) return
                 emittedOutput = true
-                emitMeta(session, { model: modelId, modelLabel: formatModelLabelForDisplay(modelId) })
+                emitMeta(session, {
+                  model: modelId,
+                  modelLabel: formatModelLabelForDisplay(modelId),
+                })
               },
               writeStatus: (text: string) => {
                 const clean = text.trim()

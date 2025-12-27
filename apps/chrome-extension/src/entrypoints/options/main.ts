@@ -1,5 +1,5 @@
-import { defaultSettings, loadSettings, saveSettings } from '../../lib/settings'
 import { readPresetOrCustomValue, resolvePresetOrCustom } from '../../lib/combo'
+import { defaultSettings, loadSettings, saveSettings } from '../../lib/settings'
 
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)

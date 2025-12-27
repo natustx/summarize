@@ -215,7 +215,8 @@ export async function streamSummaryForUrl({
     markdownMode: 'readability',
   })
 
-  const isYouTube = extracted.siteName === 'YouTube' || /youtube\.com|youtu\.be/i.test(extracted.url)
+  const isYouTube =
+    extracted.siteName === 'YouTube' || /youtube\.com|youtu\.be/i.test(extracted.url)
   const transcriptChars =
     typeof extracted.transcriptCharacters === 'number' && extracted.transcriptCharacters > 0
       ? extracted.transcriptCharacters
@@ -224,7 +225,7 @@ export async function streamSummaryForUrl({
 
   const transcriptWords =
     hasTranscript && transcriptChars != null
-      ? extracted.transcriptWordCount ?? Math.max(0, Math.round(transcriptChars / 6))
+      ? (extracted.transcriptWordCount ?? Math.max(0, Math.round(transcriptChars / 6)))
       : null
 
   const exactDurationSeconds =
@@ -236,8 +237,9 @@ export async function streamSummaryForUrl({
       ? Math.max(60, Math.max(1, Math.round(transcriptWords / 160)) * 60)
       : null
 
-  const durationSeconds = hasTranscript ? exactDurationSeconds ?? estimatedDurationSeconds : null
-  const isDurationApproximate = hasTranscript && durationSeconds != null && exactDurationSeconds == null
+  const durationSeconds = hasTranscript ? (exactDurationSeconds ?? estimatedDurationSeconds) : null
+  const isDurationApproximate =
+    hasTranscript && durationSeconds != null && exactDurationSeconds == null
 
   const kindLabel = (() => {
     if (isYouTube) return 'YouTube'

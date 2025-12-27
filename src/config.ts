@@ -542,8 +542,7 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
     if (!isRecord(value)) {
       throw new Error(`Invalid config file ${path}: "cache" must be an object.`)
     }
-    const enabled =
-      typeof value.enabled === 'boolean' ? (value.enabled as boolean) : undefined
+    const enabled = typeof value.enabled === 'boolean' ? (value.enabled as boolean) : undefined
     const maxMbRaw = value.maxMb
     const maxMb =
       typeof maxMbRaw === 'number' && Number.isFinite(maxMbRaw) && maxMbRaw > 0

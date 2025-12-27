@@ -140,7 +140,7 @@ async function runE2E(binary) {
       binary,
       ['--extract', '--json', '--metrics', 'off', '--timeout', '5s', url],
       {
-      env: { ...process.env, HOME: cacheHome },
+        env: { ...process.env, HOME: cacheHome },
       }
     )
     if (result.status !== 0) {

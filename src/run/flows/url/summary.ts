@@ -1,16 +1,16 @@
 import { countTokens } from 'gpt-tokenizer'
 import { render as renderMarkdownAnsi } from 'markdansi'
-import type { ExtractedLinkContent } from '../../../content/index.js'
-import { formatOutputLanguageForJson } from '../../../language.js'
-import { parseGatewayStyleModelId } from '../../../llm/model-id.js'
-import { buildAutoModelAttempts } from '../../../model-auto.js'
-import { buildLinkSummaryPrompt } from '../../../prompts/index.js'
 import {
   buildSummaryCacheKey,
   extractTaggedBlock,
   hashString,
   normalizeContentForHash,
 } from '../../../cache.js'
+import type { ExtractedLinkContent } from '../../../content/index.js'
+import { formatOutputLanguageForJson } from '../../../language.js'
+import { parseGatewayStyleModelId } from '../../../llm/model-id.js'
+import { buildAutoModelAttempts } from '../../../model-auto.js'
+import { buildLinkSummaryPrompt } from '../../../prompts/index.js'
 import { parseCliUserModelId } from '../../env.js'
 import {
   buildExtractFinishLabel,
@@ -335,8 +335,10 @@ export async function summarizeExtractedUrl({
   let summaryResult: Awaited<ReturnType<typeof ctx.summaryEngine.runSummaryAttempt>> | null = null
   let usedAttempt: ModelAttempt | null = null
   let summaryFromCache = false
+  let cacheChecked = false
 
   if (cacheStore && contentHash && promptHash) {
+    cacheChecked = true
     for (const attempt of attempts) {
       if (!ctx.summaryEngine.envHasKeyFor(attempt.requiredEnv)) continue
       const key = buildSummaryCacheKey({
@@ -348,6 +350,7 @@ export async function summarizeExtractedUrl({
       })
       const cached = cacheStore.getText('summary', key)
       if (!cached) continue
+      writeVerbose(ctx.stderr, ctx.verbose, 'cache hit summary', ctx.verboseColor)
       onModelChosen?.(attempt.userModelId)
       summaryResult = {
         summary: cached,
@@ -359,6 +362,9 @@ export async function summarizeExtractedUrl({
       summaryFromCache = true
       break
     }
+  }
+  if (cacheChecked && !summaryFromCache) {
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache miss summary', ctx.verboseColor)
   }
 
   let lastError: unknown = null
@@ -520,6 +526,7 @@ export async function summarizeExtractedUrl({
       languageKey,
     })
     cacheStore.setText('summary', key, summaryResult.summary, ctx.cache.ttlMs)
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache write summary', ctx.verboseColor)
   }
 
   const { summary, summaryAlreadyPrinted, modelMeta, maxOutputTokensForCall } = summaryResult

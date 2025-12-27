@@ -24,7 +24,7 @@ Lightweight, CLI-only SQLite cache. Single DB file.
 ## What we cache
 
 - **Transcripts**
-  - key: `sha256({sourceId, provider, language, model, formatVersion})`
+  - key: `sha256({url, namespace, formatVersion})`
 - **Extracted content** (URL → text/markdown)
   - key: `sha256({url, extractSettings, formatVersion})`
 - **Summaries**
@@ -56,6 +56,7 @@ Defaults: `enabled=true`, `maxMb=512`, `ttlDays=30`, `path` unset.
 ## CLI flags
 
 - `--no-cache`: bypass read + write.
+- `--cache-stats`: print cache stats and exit.
 - `--clear-cache`: delete cache DB (and WAL/SHM); must be used alone.
 
 ## Eviction policy
@@ -68,3 +69,4 @@ Defaults: `enabled=true`, `maxMb=512`, `ttlDays=30`, `path` unset.
 
 - No extension cache (daemon uses CLI cache).
 - No third-party SQLite deps.
+- Transcript namespace currently includes the YouTube mode (e.g. `yt:auto`, `yt:web`).

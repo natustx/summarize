@@ -110,7 +110,10 @@ function extractMetadata(fullPath: string): {
   }
 
   const summaryValue = summaryLine.slice('summary:'.length).trim()
-  const normalized = summaryValue.replace(/^['"]|['"]$/g, '').replace(/\s+/g, ' ').trim()
+  const normalized = summaryValue
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 
   if (!normalized) {
     return { summary: null, readWhen, error: 'summary is empty' }
