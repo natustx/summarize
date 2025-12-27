@@ -4,6 +4,7 @@ export type Settings = {
   model: string
   length: string
   language: string
+  promptOverride: string
   maxChars: number
   fontFamily: string
   fontSize: number
@@ -52,12 +53,18 @@ function normalizeLanguage(value: unknown): string {
   return trimmed
 }
 
+function normalizePromptOverride(value: unknown): string {
+  if (typeof value !== 'string') return defaultSettings.promptOverride
+  return value
+}
+
 export const defaultSettings: Settings = {
   token: '',
   autoSummarize: true,
   model: 'auto',
   length: 'xl',
   language: 'auto',
+  promptOverride: '',
   maxChars: 120_000,
   fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
   fontSize: 14,
@@ -73,6 +80,7 @@ export async function loadSettings(): Promise<Settings> {
     model: normalizeModel(raw.model),
     length: normalizeLength(raw.length),
     language: normalizeLanguage(raw.language),
+    promptOverride: normalizePromptOverride(raw.promptOverride),
     autoSummarize:
       typeof raw.autoSummarize === 'boolean' ? raw.autoSummarize : defaultSettings.autoSummarize,
     maxChars: typeof raw.maxChars === 'number' ? raw.maxChars : defaultSettings.maxChars,
@@ -88,6 +96,7 @@ export async function saveSettings(settings: Settings): Promise<void> {
       model: normalizeModel(settings.model),
       length: normalizeLength(settings.length),
       language: normalizeLanguage(settings.language),
+      promptOverride: normalizePromptOverride(settings.promptOverride),
       fontFamily: normalizeFontFamily(settings.fontFamily),
     },
   })

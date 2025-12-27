@@ -23,6 +23,9 @@ export type UrlFlowContext = {
   videoMode: 'auto' | 'transcript' | 'understand'
   outputLanguage: OutputLanguage
   lengthArg: { kind: 'preset'; preset: SummaryLength } | { kind: 'chars'; maxCharacters: number }
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
   maxOutputTokensArg: number | null
   requestedModel: RequestedModel
   requestedModelInput: string

@@ -1,6 +1,7 @@
 import type { OutputLanguage } from '../language.js'
 import { formatOutputLanguageInstruction } from '../language.js'
 import type { SummaryLength } from '../shared/contracts.js'
+import { buildInstructions, buildTaggedPrompt, type PromptOverrides } from './format.js'
 
 const SUMMARY_LENGTH_DIRECTIVES: Record<SummaryLength, { guidance: string; formatting: string }> = {
   short: {
@@ -87,6 +88,9 @@ export function buildLinkSummaryPrompt({
   outputLanguage,
   summaryLength,
   shares,
+  promptOverride,
+  lengthInstruction,
+  languageInstruction,
 }: {
   url: string
   title: string | null
@@ -98,6 +102,9 @@ export function buildLinkSummaryPrompt({
   summaryLength: SummaryLengthTarget
   outputLanguage?: OutputLanguage | null
   shares: ShareContextEntry[]
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
 }): string {
   const contentCharacters = content.length
   const contextLines: string[] = [`Source URL: ${url}`]
@@ -166,16 +173,35 @@ export function buildLinkSummaryPrompt({
       ? 'You are also given quotes from people who recently shared this link. When these quotes contain substantive commentary, append a brief subsection titled "What sharers are saying" with one or two bullet points summarizing the key reactions. If they are generic reshares with no commentary, omit that subsection.'
       : 'You are not given any quotes from people who shared this link. Do not fabricate reactions or add a "What sharers are saying" subsection.'
 
-  const sharesBlock = shares.length > 0 ? `Tweets from sharers:\n${shareLines.join('\n')}\n\n` : ''
-  const languageInstruction = formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' })
+  const shareBlock = shares.length > 0 ? `Tweets from sharers:\n${shareLines.join('\n')}` : ''
+  const baseInstructions = [
+    audienceLine,
+    directive.guidance,
+    directive.formatting,
+    maxCharactersLine,
+    contentLengthLine,
+    formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' }),
+    'Keep the response compact by avoiding blank lines between sentences or list items; use only the single newlines required by the formatting instructions.',
+    'Do not use emojis, disclaimers, or speculation.',
+    'Write in direct, factual language.',
+    'Format the answer in Markdown and obey the length-specific formatting above.',
+    'Base everything strictly on the provided content and never invent details.',
+    shareGuidance,
+  ]
+    .filter((line) => typeof line === 'string' && line.trim().length > 0)
+    .join('\n')
 
-  return `${audienceLine} ${directive.guidance} ${directive.formatting} ${maxCharactersLine} ${contentLengthLine} ${languageInstruction} Keep the response compact by avoiding blank lines between sentences or list items; use only the single newlines required by the formatting instructions. Do not use emojis, disclaimers, or speculation. Write in direct, factual language. Format the answer in Markdown and obey the length-specific formatting above. Base everything strictly on the provided content and never invent details. ${shareGuidance}
+  const instructions = buildInstructions({
+    base: baseInstructions,
+    overrides: { promptOverride, lengthInstruction, languageInstruction } satisfies PromptOverrides,
+  })
+  const context = [contextHeader, shareBlock]
+    .filter((line) => typeof line === 'string' && line.trim().length > 0)
+    .join('\n')
 
-${contextHeader}
-
-${sharesBlock}Extracted content:
-"""
-${content}
-"""
-`
+  return buildTaggedPrompt({
+    instructions,
+    context,
+    content,
+  })
 }

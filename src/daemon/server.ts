@@ -205,6 +205,8 @@ export async function runDaemonServer({
         const modelOverride = typeof obj.model === 'string' ? obj.model.trim() : null
         const lengthRaw = typeof obj.length === 'string' ? obj.length.trim() : ''
         const languageRaw = typeof obj.language === 'string' ? obj.language.trim() : ''
+        const promptRaw = typeof obj.prompt === 'string' ? obj.prompt : ''
+        const promptOverride = promptRaw.trim() || null
         const modeRaw = typeof obj.mode === 'string' ? obj.mode.trim().toLowerCase() : ''
         const mode: DaemonRequestedMode =
           modeRaw === 'url' ? 'url' : modeRaw === 'page' ? 'page' : 'auto'
@@ -257,6 +259,7 @@ export async function runDaemonServer({
                     env,
                     fetchImpl,
                     modelOverride: normalizedModelOverride,
+                    promptOverride,
                     lengthRaw,
                     languageRaw,
                     input: { url: pageUrl, title, maxCharacters },
@@ -266,6 +269,7 @@ export async function runDaemonServer({
                     env,
                     fetchImpl,
                     modelOverride: normalizedModelOverride,
+                    promptOverride,
                     lengthRaw,
                     languageRaw,
                     input: { url: pageUrl, title, text: textContent, truncated },

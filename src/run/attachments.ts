@@ -83,17 +83,10 @@ export function assertAssetMediaTypeSupported({
 export function buildAssetPromptPayload({
   promptText,
   attachment,
-  textContent,
 }: {
   promptText: string
   attachment: AssetAttachment
-  textContent: { content: string; bytes: number } | null
 }): string | Array<ModelMessage> {
-  if (textContent && attachment.part.type === 'file' && isTextLikeMediaType(attachment.mediaType)) {
-    const header = `File: ${attachment.filename ?? 'unknown'} (${attachment.mediaType})`
-    return `${promptText}\n\n---\n${header}\n\n${textContent.content}`.trim()
-  }
-
   return buildAssetPromptMessages({ promptText, attachment })
 }
 

@@ -48,6 +48,9 @@ describe('prompts/link-summary - more branches', () => {
       ],
     })
 
+    expect(prompt).toContain('<instructions>')
+    expect(prompt).toContain('<context>')
+    expect(prompt).toContain('<content>')
     expect(prompt).toContain('Source URL: https://example.com')
     expect(prompt).toContain('Title: Title')
     expect(prompt).toContain('Site: Site')

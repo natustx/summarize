@@ -1,6 +1,7 @@
 import type { OutputLanguage } from '../language.js'
 import { formatOutputLanguageInstruction } from '../language.js'
 import type { SummaryLengthTarget } from './link-summary.js'
+import { buildInstructions, buildTaggedPrompt, type PromptOverrides } from './format.js'
 
 export function buildFileSummaryPrompt({
   filename,
@@ -8,12 +9,18 @@ export function buildFileSummaryPrompt({
   outputLanguage,
   summaryLength,
   contentLength,
+  promptOverride,
+  lengthInstruction,
+  languageInstruction,
 }: {
   filename: string | null
   mediaType: string | null
   summaryLength: SummaryLengthTarget
   contentLength?: number | null
   outputLanguage?: OutputLanguage | null
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
 }): string {
   const contentCharacters = typeof contentLength === 'number' ? contentLength : null
   const effectiveSummaryLength =
@@ -38,13 +45,31 @@ export function buildFileSummaryPrompt({
     mediaType ? `Media type: ${mediaType}` : null,
   ].filter(Boolean)
 
-  const languageInstruction = formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' })
-  const prompt = `You summarize files for curious users. Summarize the attached file. Be factual and do not invent details. Format the answer in Markdown. Do not use emojis. ${maxCharactersLine} ${contentLengthLine}
-${languageInstruction}
+  const baseInstructions = [
+    'You summarize files for curious users.',
+    'Summarize the attached file.',
+    'Be factual and do not invent details.',
+    'Format the answer in Markdown.',
+    'Do not use emojis.',
+    maxCharactersLine,
+    contentLengthLine,
+    formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' }),
+    'Return only the summary.',
+  ]
+    .filter((line) => typeof line === 'string' && line.trim().length > 0)
+    .join('\n')
 
-${headerLines.length > 0 ? `${headerLines.join('\n')}\n\n` : ''}Return only the summary.`
+  const instructions = buildInstructions({
+    base: baseInstructions,
+    overrides: { promptOverride, lengthInstruction, languageInstruction } satisfies PromptOverrides,
+  })
+  const context = headerLines.join('\n')
 
-  return prompt
+  return buildTaggedPrompt({
+    instructions,
+    context,
+    content: '',
+  })
 }
 
 export function buildFileTextSummaryPrompt({
@@ -54,6 +79,10 @@ export function buildFileTextSummaryPrompt({
   outputLanguage,
   summaryLength,
   contentLength,
+  content,
+  promptOverride,
+  lengthInstruction,
+  languageInstruction,
 }: {
   filename: string | null
   originalMediaType: string | null
@@ -61,6 +90,10 @@ export function buildFileTextSummaryPrompt({
   summaryLength: SummaryLengthTarget
   contentLength: number
   outputLanguage?: OutputLanguage | null
+  content?: string | null
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
 }): string {
   const effectiveSummaryLength =
     typeof summaryLength === 'string'
@@ -80,8 +113,29 @@ export function buildFileTextSummaryPrompt({
     `Extracted content length: ${contentLength.toLocaleString()} characters. Hard limit: never exceed this length. If the requested length is larger, do not pad—finish early rather than adding filler.`,
   ].filter(Boolean)
 
-  const languageInstruction = formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' })
-  return `You summarize files for curious users. Summarize the file content below. Be factual and do not invent details. Format the answer in Markdown. Do not use emojis. ${maxCharactersLine} ${languageInstruction}
+  const baseInstructions = [
+    'You summarize files for curious users.',
+    'Summarize the file content below.',
+    'Be factual and do not invent details.',
+    'Format the answer in Markdown.',
+    'Do not use emojis.',
+    maxCharactersLine,
+    formatOutputLanguageInstruction(outputLanguage ?? { kind: 'auto' }),
+    'Return only the summary.',
+  ]
+    .filter((line) => typeof line === 'string' && line.trim().length > 0)
+    .join('\n')
 
-${headerLines.length > 0 ? `${headerLines.join('\n')}\n\n` : ''}Return only the summary.`
+  const instructions = buildInstructions({
+    base: baseInstructions,
+    overrides: { promptOverride, lengthInstruction, languageInstruction } satisfies PromptOverrides,
+  })
+  const context = headerLines.join('\n')
+  const contentText = typeof content === 'string' ? content : ''
+
+  return buildTaggedPrompt({
+    instructions,
+    context,
+    content: contentText,
+  })
 }

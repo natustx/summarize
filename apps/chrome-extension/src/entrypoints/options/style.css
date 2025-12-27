@@ -72,7 +72,8 @@ label > span {
 }
 
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+textarea {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -83,8 +84,14 @@ input[type="number"] {
   font-size: 12px;
 }
 
-input:focus {
+input:focus,
+textarea:focus {
   border-color: rgba(122, 228, 243, 0.45);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
 }
 
 .row {

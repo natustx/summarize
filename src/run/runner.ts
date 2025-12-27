@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { CommanderError } from 'commander'
 import {
   parseDurationMs,
@@ -105,6 +106,34 @@ export async function runCli(
   if (program.opts().version) {
     stdout.write(`${formatVersionLine()}\n`)
     return
+  }
+
+  const promptArg = typeof program.opts().prompt === 'string' ? program.opts().prompt : null
+  const promptFileArg =
+    typeof program.opts().promptFile === 'string' ? program.opts().promptFile : null
+  if (promptArg && promptFileArg) {
+    throw new Error('Use either --prompt or --prompt-file (not both).')
+  }
+  let promptOverride: string | null = null
+  if (promptFileArg) {
+    let text: string
+    try {
+      text = await readFile(promptFileArg, 'utf8')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`Failed to read --prompt-file ${promptFileArg}: ${message}`)
+    }
+    const trimmed = text.trim()
+    if (!trimmed) {
+      throw new Error(`Prompt file ${promptFileArg} is empty.`)
+    }
+    promptOverride = trimmed
+  } else if (promptArg) {
+    const trimmed = promptArg.trim()
+    if (!trimmed) {
+      throw new Error('Prompt must not be empty.')
+    }
+    promptOverride = trimmed
   }
 
   const cliFlagPresent = normalizedArgv.some((arg) => arg === '--cli' || arg.startsWith('--cli='))
@@ -228,6 +257,14 @@ export async function runCli(
     cliFlagPresent,
     cliProviderArg,
   })
+  const lengthInstruction =
+    promptOverride && lengthExplicitlySet && lengthArg.kind === 'chars'
+      ? `Output is ${lengthArg.maxCharacters.toLocaleString()} characters.`
+      : null
+  const languageInstruction =
+    promptOverride && languageExplicitlySet && outputLanguage.kind === 'fixed'
+      ? `Output should be ${outputLanguage.label}.`
+      : null
   const {
     apiKey,
     openrouterApiKey,
@@ -368,6 +405,9 @@ export async function runCli(
     outputLanguage,
     videoMode,
     fixedModelSpec,
+    promptOverride,
+    lengthInstruction,
+    languageInstruction,
     isFallbackModel,
     desiredOutputTokens,
     envForAuto,
@@ -450,6 +490,9 @@ export async function runCli(
     videoMode,
     outputLanguage,
     lengthArg,
+    promptOverride,
+    lengthInstruction,
+    languageInstruction,
     maxOutputTokensArg,
     requestedModel,
     requestedModelInput,

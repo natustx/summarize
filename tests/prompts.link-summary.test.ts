@@ -19,6 +19,9 @@ describe('buildLinkSummaryPrompt', () => {
       shares: [],
     })
 
+    expect(prompt).toContain('<instructions>')
+    expect(prompt).toContain('<context>')
+    expect(prompt).toContain('<content>')
     expect(prompt).toContain('Write the answer in English.')
     expect(prompt).toContain('Source URL: https://example.com')
     expect(prompt).toContain('Title: Hello')
@@ -43,6 +46,7 @@ describe('buildLinkSummaryPrompt', () => {
       shares: [],
     })
 
+    expect(prompt).toContain('<instructions>')
     expect(prompt).toContain('Target length: up to 4 characters total')
     expect(prompt).toContain('Extracted content length: 4 characters')
   })
@@ -71,6 +75,7 @@ describe('buildLinkSummaryPrompt', () => {
       ],
     })
 
+    expect(prompt).toContain('<context>')
     expect(prompt).toContain('Write the answer in German.')
     expect(prompt).toContain('Note: Content truncated')
     expect(prompt).toContain('Tweets from sharers:')

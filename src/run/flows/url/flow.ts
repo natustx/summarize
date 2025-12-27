@@ -245,6 +245,9 @@ export async function runUrlFlow({
       extracted,
       outputLanguage: ctx.outputLanguage,
       lengthArg: ctx.lengthArg,
+      promptOverride: ctx.promptOverride ?? null,
+      lengthInstruction: ctx.lengthInstruction ?? null,
+      languageInstruction: ctx.languageInstruction ?? null,
     })
 
     // Whisper transcription costs need to be folded into the finish line totals.

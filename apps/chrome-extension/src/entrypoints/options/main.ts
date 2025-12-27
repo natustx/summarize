@@ -13,6 +13,7 @@ const tokenEl = byId<HTMLInputElement>('token')
 const modelEl = byId<HTMLInputElement>('model')
 const lengthEl = byId<HTMLInputElement>('length')
 const languageEl = byId<HTMLInputElement>('language')
+const promptOverrideEl = byId<HTMLTextAreaElement>('promptOverride')
 const autoEl = byId<HTMLInputElement>('auto')
 const maxCharsEl = byId<HTMLInputElement>('maxChars')
 const fontFamilyEl = byId<HTMLInputElement>('fontFamily')
@@ -28,6 +29,7 @@ async function load() {
   modelEl.value = s.model
   lengthEl.value = s.length
   languageEl.value = s.language
+  promptOverrideEl.value = s.promptOverride
   autoEl.checked = s.autoSummarize
   maxCharsEl.value = String(s.maxChars)
   fontFamilyEl.value = s.fontFamily
@@ -43,6 +45,7 @@ formEl.addEventListener('submit', (e) => {
       model: modelEl.value || defaultSettings.model,
       length: lengthEl.value || defaultSettings.length,
       language: languageEl.value || defaultSettings.language,
+      promptOverride: promptOverrideEl.value || defaultSettings.promptOverride,
       autoSummarize: autoEl.checked,
       maxChars: Number(maxCharsEl.value) || defaultSettings.maxChars,
       fontFamily: fontFamilyEl.value || defaultSettings.fontFamily,

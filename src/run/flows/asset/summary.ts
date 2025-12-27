@@ -41,6 +41,9 @@ export type AssetSummaryContext = {
   outputLanguage: OutputLanguage
   videoMode: 'auto' | 'transcript' | 'understand'
   fixedModelSpec: FixedModelSpec | null
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
   isFallbackModel: boolean
   desiredOutputTokens: number | null
   envForAuto: Record<string, string | undefined>
@@ -103,6 +106,9 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       lengthArg: ctx.lengthArg,
       outputLanguage: ctx.outputLanguage,
       fixedModelSpec: ctx.fixedModelSpec,
+      promptOverride: ctx.promptOverride ?? null,
+      lengthInstruction: ctx.lengthInstruction ?? null,
+      languageInstruction: ctx.languageInstruction ?? null,
     },
     attachment: args.attachment,
   })
@@ -221,6 +227,9 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
         mediaType: args.attachment.mediaType,
         summaryLength: summaryLengthTarget,
         outputLanguage: ctx.outputLanguage,
+        promptOverride: ctx.promptOverride ?? null,
+        lengthInstruction: ctx.lengthInstruction ?? null,
+        languageInstruction: ctx.languageInstruction ?? null,
       }),
       allowTools: true,
       cwd: dir,

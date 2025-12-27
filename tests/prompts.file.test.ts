@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  buildFileSummaryPrompt,
-  buildFileTextSummaryPrompt,
-} from '../packages/core/src/prompts/index.js'
+import { buildFileSummaryPrompt, buildFileTextSummaryPrompt } from '../packages/core/src/prompts/index.js'
+import { parseOutputLanguage } from '../src/language.js'
 
 describe('buildFileSummaryPrompt', () => {
   it('builds a prompt for preset length', () => {
     const prompt = buildFileSummaryPrompt({
       filename: 'paper.pdf',
       mediaType: 'application/pdf',
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: 'short',
     })
 
+    expect(prompt).toContain('<instructions>')
+    expect(prompt).toContain('<context>')
     expect(prompt).toContain('Filename: paper.pdf')
     expect(prompt).toContain('Media type: application/pdf')
     expect(prompt).not.toContain('Target length:')
@@ -23,7 +23,7 @@ describe('buildFileSummaryPrompt', () => {
     const prompt = buildFileSummaryPrompt({
       filename: null,
       mediaType: null,
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: { maxCharacters: 20_000 },
       contentLength: 120,
     })
@@ -39,7 +39,7 @@ describe('buildFileSummaryPrompt', () => {
     const prompt = buildFileSummaryPrompt({
       filename: 'report.txt',
       mediaType: 'text/plain',
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: { maxCharacters: 10_000 },
       contentLength: 120,
     })
@@ -52,7 +52,7 @@ describe('buildFileSummaryPrompt', () => {
     const prompt = buildFileSummaryPrompt({
       filename: null,
       mediaType: null,
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: 'short',
       contentLength: 0,
     })
@@ -69,11 +69,13 @@ describe('buildFileTextSummaryPrompt', () => {
       filename: 'notes.txt',
       originalMediaType: 'text/plain',
       contentMediaType: 'text/markdown',
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: { maxCharacters: 10_000 },
       contentLength: 300,
+      content: 'Hello world',
     })
 
+    expect(prompt).toContain('<content>')
     expect(prompt).toContain('Target length: up to 300 characters total')
     expect(prompt).toContain('Original media type: text/plain')
     expect(prompt).toContain('Provided as: text/markdown')
@@ -85,9 +87,10 @@ describe('buildFileTextSummaryPrompt', () => {
       filename: null,
       originalMediaType: null,
       contentMediaType: 'text/plain',
-      outputLanguage: 'English',
+      outputLanguage: parseOutputLanguage('English'),
       summaryLength: 'short',
       contentLength: 120,
+      content: 'Hello',
     })
 
     expect(prompt).not.toContain('Original media type:')

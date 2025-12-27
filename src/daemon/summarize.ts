@@ -48,6 +48,7 @@ export async function streamSummaryForVisiblePage({
   fetchImpl,
   input,
   modelOverride,
+  promptOverride,
   lengthRaw,
   languageRaw,
   sink,
@@ -56,6 +57,7 @@ export async function streamSummaryForVisiblePage({
   fetchImpl: typeof fetch
   input: VisiblePageInput
   modelOverride: string | null
+  promptOverride: string | null
   lengthRaw: unknown
   languageRaw: unknown
   sink: StreamSink
@@ -70,6 +72,19 @@ export async function streamSummaryForVisiblePage({
     sink,
   })
 
+  const lengthInstruction =
+    promptOverride && typeof ctx.summaryLength !== 'string'
+      ? `Output is ${ctx.summaryLength.maxCharacters.toLocaleString()} characters.`
+      : null
+  const languageExplicit =
+    typeof languageRaw === 'string' &&
+    languageRaw.trim().length > 0 &&
+    languageRaw.trim().toLowerCase() !== 'auto'
+  const languageInstruction =
+    promptOverride && languageExplicit && ctx.outputLanguage.kind === 'fixed'
+      ? `Output should be ${ctx.outputLanguage.label}.`
+      : null
+
   const prompt = buildLinkSummaryPrompt({
     url: input.url,
     title: input.title,
@@ -81,6 +96,9 @@ export async function streamSummaryForVisiblePage({
     summaryLength: ctx.summaryLength,
     outputLanguage: ctx.outputLanguage,
     shares: [],
+    promptOverride,
+    lengthInstruction,
+    languageInstruction,
   })
   const promptTokens = countTokens(prompt)
 
@@ -134,6 +152,7 @@ export async function streamSummaryForUrl({
   fetchImpl,
   input,
   modelOverride,
+  promptOverride,
   lengthRaw,
   languageRaw,
   sink,
@@ -142,6 +161,7 @@ export async function streamSummaryForUrl({
   fetchImpl: typeof fetch
   input: UrlModeInput
   modelOverride: string | null
+  promptOverride: string | null
   lengthRaw: unknown
   languageRaw: unknown
   sink: StreamSink
@@ -191,6 +211,19 @@ export async function streamSummaryForUrl({
     extracted.siteName === 'YouTube' ||
     (extracted.transcriptSource !== null && extracted.transcriptSource !== 'unavailable')
 
+  const lengthInstruction =
+    promptOverride && typeof ctx.summaryLength !== 'string'
+      ? `Output is ${ctx.summaryLength.maxCharacters.toLocaleString()} characters.`
+      : null
+  const languageExplicit =
+    typeof languageRaw === 'string' &&
+    languageRaw.trim().length > 0 &&
+    languageRaw.trim().toLowerCase() !== 'auto'
+  const languageInstruction =
+    promptOverride && languageExplicit && ctx.outputLanguage.kind === 'fixed'
+      ? `Output should be ${ctx.outputLanguage.label}.`
+      : null
+
   const prompt = buildLinkSummaryPrompt({
     url: extracted.url,
     title: extracted.title ?? input.title,
@@ -202,6 +235,9 @@ export async function streamSummaryForUrl({
     summaryLength: ctx.summaryLength,
     outputLanguage: ctx.outputLanguage,
     shares: [],
+    promptOverride,
+    lengthInstruction,
+    languageInstruction,
   })
   const promptTokens = countTokens(prompt)
 

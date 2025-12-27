@@ -1,0 +1,45 @@
+export type PromptOverrides = {
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
+}
+
+export function buildInstructions({
+  base,
+  overrides,
+}: {
+  base: string
+  overrides?: PromptOverrides | null
+}): string {
+  const lines: string[] = []
+  const override = overrides?.promptOverride?.trim()
+  if (override) {
+    lines.push(override)
+  } else {
+    const trimmedBase = base.trim()
+    if (trimmedBase) lines.push(trimmedBase)
+  }
+
+  const lengthInstruction = overrides?.lengthInstruction?.trim()
+  if (lengthInstruction) lines.push(lengthInstruction)
+
+  const languageInstruction = overrides?.languageInstruction?.trim()
+  if (languageInstruction) lines.push(languageInstruction)
+
+  return lines.join('\n')
+}
+
+export function buildTaggedPrompt({
+  instructions,
+  context,
+  content,
+}: {
+  instructions: string
+  context: string
+  content: string
+}): string {
+  const safeInstructions = instructions.trim()
+  const safeContext = context.trim()
+  const safeContent = typeof content === 'string' ? content : ''
+  return `<instructions>\n${safeInstructions}\n</instructions>\n\n<context>\n${safeContext}\n</context>\n\n<content>\n${safeContent}\n</content>\n`
+}

@@ -28,6 +28,9 @@ export type AssetPreprocessContext = {
   lengthArg: { kind: 'preset'; preset: SummaryLength } | { kind: 'chars'; maxCharacters: number }
   outputLanguage: OutputLanguage
   fixedModelSpec: FixedModelSpec | null
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
 }
 
 export type AssetPreprocessResult = {
@@ -75,20 +78,35 @@ export async function prepareAssetPrompt({
       summaryLength: summaryLengthTarget,
       contentLength: textContent?.content.length ?? null,
       outputLanguage: ctx.outputLanguage,
+      promptOverride: ctx.promptOverride ?? null,
+      lengthInstruction: ctx.lengthInstruction ?? null,
+      languageInstruction: ctx.languageInstruction ?? null,
     })
-    return buildAssetPromptPayload({ promptText, attachment, textContent })
+    return buildAssetPromptPayload({ promptText, attachment })
   }
 
-  const buildMarkitdownPromptPayload = (markdown: string) => {
+  const buildInlinePromptPayload = ({
+    content,
+    contentMediaType,
+    originalMediaType,
+  }: {
+    content: string
+    contentMediaType: string
+    originalMediaType: string | null
+  }) => {
     promptText = buildFileTextSummaryPrompt({
       filename: attachment.filename,
-      originalMediaType: attachment.mediaType,
-      contentMediaType: 'text/markdown',
+      originalMediaType,
+      contentMediaType,
       summaryLength: summaryLengthTarget,
-      contentLength: markdown.length,
+      contentLength: content.length,
       outputLanguage: ctx.outputLanguage,
+      content,
+      promptOverride: ctx.promptOverride ?? null,
+      lengthInstruction: ctx.lengthInstruction ?? null,
+      languageInstruction: ctx.languageInstruction ?? null,
     })
-    return `${promptText}\n\n---\n\n${markdown}`.trim()
+    return promptText
   }
 
   let preprocessedMarkdown: string | null = null
@@ -128,7 +146,17 @@ export async function prepareAssetPrompt({
     if (!preprocessedMarkdown) {
       throw new Error('Internal error: missing markitdown content for preprocessing')
     }
-    promptPayload = buildMarkitdownPromptPayload(preprocessedMarkdown)
+    promptPayload = buildInlinePromptPayload({
+      content: preprocessedMarkdown,
+      contentMediaType: 'text/markdown',
+      originalMediaType: attachment.mediaType,
+    })
+  } else if (textContent) {
+    promptPayload = buildInlinePromptPayload({
+      content: textContent.content,
+      contentMediaType: attachment.mediaType,
+      originalMediaType: attachment.mediaType,
+    })
   }
 
   if (
@@ -186,7 +214,11 @@ export async function prepareAssetPrompt({
       }
       usingPreprocessedMarkdown = true
       assetFooterParts.push(`markitdown(${attachment.mediaType})`)
-      promptPayload = buildMarkitdownPromptPayload(preprocessedMarkdown)
+      promptPayload = buildInlinePromptPayload({
+        content: preprocessedMarkdown,
+        contentMediaType: 'text/markdown',
+        originalMediaType: attachment.mediaType,
+      })
     }
   }
 

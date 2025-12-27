@@ -76,6 +76,12 @@ export function buildProgram() {
       'LLM model id: auto, <name>, cli/<provider>/<model>, xai/..., openai/..., google/..., anthropic/..., zai/... or openrouter/<author>/<slug> (default: auto)',
       undefined
     )
+    .option(
+      '--prompt <text>',
+      'Override the summary prompt (instruction prefix; context/content still appended).',
+      undefined
+    )
+    .option('--prompt-file <path>', 'Read the prompt override from a file.', undefined)
     .addOption(
       new Option(
         '--cli [provider]',

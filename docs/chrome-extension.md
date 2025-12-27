@@ -79,9 +79,10 @@ The daemon decides the best pipeline:
   - Model preset: `auto` | `free` | custom string (e.g. `openai/gpt-5-mini`, `openrouter/...`).
   - Length: `short|medium|long|xl|xxl` (or a character target like `20k`).
   - Language: `auto` (match source) or a tag like `en`, `de`, `pt-BR` (or free-form like “German”).
+  - Prompt override (advanced): custom instruction prefix (context + content still appended).
   - Auto summarize: on/off.
   - Typography: font family (dropdown + custom), font size (slider).
-- Extension includes current settings in request; daemon treats them like CLI flags (`--model`, `--length`, `--language`).
+- Extension includes current settings in request; daemon treats them like CLI flags (`--model`, `--length`, `--language`, `--prompt`).
 
 ## Token Pairing / Setup Mode
 
@@ -109,6 +110,9 @@ Problem: daemon must be secured; extension must discover and pair with it.
     - `url: string` (required)
     - `title: string | null`
     - `model?: string` (e.g. `auto`, `free`, `openai/gpt-5-mini`, ...)
+    - `length?: string` (e.g. `short`, `xl`, `20k`)
+    - `language?: string` (e.g. `auto`, `en`, `de`, `pt-BR`)
+    - `prompt?: string` (custom instruction prefix)
     - `mode?: "auto" | "page" | "url"` (default: `"auto"`)
     - `maxCharacters?: number | null` (caps URL-mode extraction before summarization)
     - `text?: string` (required for `mode: "page"`; optional for `auto`)

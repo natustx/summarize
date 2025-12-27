@@ -23,10 +23,16 @@ export function buildUrlPrompt({
   extracted,
   outputLanguage,
   lengthArg,
+  promptOverride,
+  lengthInstruction,
+  languageInstruction,
 }: {
   extracted: ExtractedLinkContent
   outputLanguage: UrlFlowContext['outputLanguage']
   lengthArg: UrlFlowContext['lengthArg']
+  promptOverride?: string | null
+  lengthInstruction?: string | null
+  languageInstruction?: string | null
 }): string {
   const isYouTube = extracted.siteName === 'YouTube'
   return buildLinkSummaryPrompt({
@@ -43,6 +49,9 @@ export function buildUrlPrompt({
       lengthArg.kind === 'preset' ? lengthArg.preset : { maxCharacters: lengthArg.maxCharacters },
     outputLanguage,
     shares: [],
+    promptOverride: promptOverride ?? null,
+    lengthInstruction: lengthInstruction ?? null,
+    languageInstruction: languageInstruction ?? null,
   })
 }
 

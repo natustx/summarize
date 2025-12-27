@@ -43,6 +43,10 @@ installed, auto mode can use local CLI models when `cli.enabled` is set (see `do
   - See `docs/model-auto.md`
 - `--model <preset>`
   - Uses a config-defined preset (see `docs/config.md` → “Presets”).
+- `--prompt <text>` / `--prompt-file <path>`
+  - Overrides the built-in summary instructions (prompt becomes the instruction prefix).
+  - Prompts are wrapped in `<instructions>`, `<context>`, `<content>` tags.
+  - When `--length` is numeric, we add `Output is X characters.` When `--language` is explicitly set, we add `Output should be <language>.`
 - `--video-mode auto|transcript|understand`
   - Only relevant for video inputs / video-only pages.
 - `--length short|medium|long|xl|xxl|<chars>`

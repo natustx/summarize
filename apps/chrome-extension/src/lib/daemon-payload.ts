@@ -14,6 +14,7 @@ export function buildDaemonRequestBody({
   extracted: ExtractedPage
   settings: Settings
 }): Record<string, unknown> {
+  const promptOverride = settings.promptOverride?.trim()
   return {
     url: extracted.url,
     title: extracted.title,
@@ -22,6 +23,7 @@ export function buildDaemonRequestBody({
     model: settings.model,
     length: settings.length,
     language: settings.language,
+    ...(promptOverride ? { prompt: promptOverride } : {}),
     mode: 'auto',
     maxCharacters: settings.maxChars,
   }
