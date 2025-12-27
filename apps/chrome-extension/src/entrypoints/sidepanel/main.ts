@@ -35,6 +35,8 @@ type BgToPanel =
   | { type: 'run:start'; run: RunStart }
   | { type: 'run:error'; message: string }
 
+type PanelToBgType = PanelToBg['type']
+
 function byId<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id)
   if (!el) throw new Error(`Missing #${id}`)
@@ -224,8 +226,12 @@ function updateControls(state: UiState) {
   maybeShowSetup(state)
 }
 
-const port = chrome.runtime.connect({ name: 'panel' })
-port.onMessage.addListener((msg: BgToPanel) => {
+let port: chrome.runtime.Port | null = null
+let reconnectTimer: number | null = null
+let reconnectAttempt = 0
+const pendingByType = new Map<PanelToBgType, PanelToBg>()
+
+function handleBgMessage(msg: BgToPanel) {
   switch (msg.type) {
     case 'ui:state':
       currentState = msg.state
@@ -241,10 +247,78 @@ port.onMessage.addListener((msg: BgToPanel) => {
       void startStream(msg.run)
       return
   }
-})
+}
 
 function send(message: PanelToBg) {
-  port.postMessage(message)
+  if (!port) {
+    queueMessage(message)
+    scheduleReconnect()
+    return
+  }
+  try {
+    port.postMessage(message)
+  } catch {
+    queueMessage(message)
+    scheduleReconnect()
+  }
+}
+
+function queueMessage(message: PanelToBg) {
+  if (message.type === 'panel:ping') return
+  pendingByType.set(message.type, message)
+}
+
+function flushPending() {
+  if (!port) return
+  const order: PanelToBgType[] = [
+    'panel:ready',
+    'panel:setAuto',
+    'panel:setModel',
+    'panel:rememberUrl',
+    'panel:summarize',
+    'panel:openOptions',
+  ]
+  for (const type of order) {
+    const msg = pendingByType.get(type)
+    if (!msg) continue
+    try {
+      port.postMessage(msg)
+    } catch {
+      return
+    }
+  }
+  pendingByType.clear()
+}
+
+function connectPort() {
+  if (port) return
+  try {
+    port = chrome.runtime.connect({ name: 'panel' })
+  } catch {
+    scheduleReconnect()
+    return
+  }
+
+  reconnectAttempt = 0
+  port.onMessage.addListener(handleBgMessage)
+  port.onDisconnect.addListener(() => {
+    port = null
+    if (!streaming) setStatus('Reconnecting…')
+    scheduleReconnect()
+  })
+
+  flushPending()
+}
+
+function scheduleReconnect() {
+  if (port) return
+  if (reconnectTimer) return
+  const delayMs = Math.min(250 * 2 ** reconnectAttempt, 3_000)
+  reconnectAttempt = Math.min(reconnectAttempt + 1, 6)
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null
+    connectPort()
+  }, delayMs)
 }
 
 function toggleDrawer(force?: boolean) {
@@ -283,6 +357,7 @@ void (async () => {
   autoEl.checked = s.autoSummarize
   applyTypography(fontEl.value, s.fontSize)
   toggleDrawer(false)
+  connectPort()
   send({ type: 'panel:ready' })
 })()
 
