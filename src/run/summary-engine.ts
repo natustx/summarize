@@ -368,6 +368,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
     }
 
     if (streamResult) {
+      deps.clearProgressForStdout()
       getLastStreamError = streamResult.lastError
       let streamed = ''
       let plainFlushedLen = 0
