@@ -1,8 +1,10 @@
 import { countTokens } from 'gpt-tokenizer'
 import { render as renderMarkdownAnsi } from 'markdansi'
 import {
+  buildLanguageKey,
+  buildLengthKey,
+  buildPromptHash,
   buildSummaryCacheKey,
-  extractTaggedBlock,
   hashString,
   normalizeContentForHash,
 } from '../../../cache.js'
@@ -93,17 +95,6 @@ const pickModelForFinishLine = (llmCalls: UrlFlowContext['llmCalls'], fallback: 
     (llmCalls.length > 0 ? (llmCalls[llmCalls.length - 1]?.model ?? null) : null) ??
     fallback
   )
-}
-
-const buildLengthKey = (lengthArg: UrlFlowContext['lengthArg']): string =>
-  lengthArg.kind === 'preset' ? `preset:${lengthArg.preset}` : `chars:${lengthArg.maxCharacters}`
-
-const buildLanguageKey = (outputLanguage: UrlFlowContext['outputLanguage']): string =>
-  outputLanguage.kind === 'auto' ? 'auto' : outputLanguage.tag
-
-const buildPromptHash = (prompt: string): string => {
-  const instructions = extractTaggedBlock(prompt, 'instructions') ?? prompt
-  return hashString(instructions.trim())
 }
 
 const buildModelMetaFromAttempt = (attempt: ModelAttempt) => {

@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve as resolvePath } from 'node:path'
 
 import type { TranscriptCache, TranscriptSource } from './content/index.js'
+import type { LengthArg } from './flags.js'
+import type { OutputLanguage } from './language.js'
 
 export type CacheKind = 'extract' | 'summary' | 'transcript'
 
@@ -374,6 +376,21 @@ export function extractTaggedBlock(prompt: string, tag: 'instructions' | 'conten
   const end = prompt.indexOf(close, start + open.length)
   if (end === -1) return null
   return prompt.slice(start + open.length, end).trim()
+}
+
+export function buildPromptHash(prompt: string): string {
+  const instructions = extractTaggedBlock(prompt, 'instructions') ?? prompt
+  return hashString(instructions.trim())
+}
+
+export function buildLengthKey(lengthArg: LengthArg): string {
+  return lengthArg.kind === 'preset'
+    ? `preset:${lengthArg.preset}`
+    : `chars:${lengthArg.maxCharacters}`
+}
+
+export function buildLanguageKey(outputLanguage: OutputLanguage): string {
+  return outputLanguage.kind === 'auto' ? 'auto' : outputLanguage.tag
 }
 
 export function buildExtractCacheKey({

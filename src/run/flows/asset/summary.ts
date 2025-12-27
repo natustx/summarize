@@ -2,6 +2,9 @@ import path from 'node:path'
 import { countTokens } from 'gpt-tokenizer'
 import { render as renderMarkdownAnsi } from 'markdansi'
 import {
+  buildLanguageKey,
+  buildLengthKey,
+  buildPromptHash,
   buildSummaryCacheKey,
   type CacheState,
   extractTaggedBlock,
@@ -34,17 +37,6 @@ import type { createSummaryEngine } from '../../summary-engine.js'
 import { isRichTty, markdownRenderWidth, supportsColor } from '../../terminal.js'
 import type { ModelAttempt } from '../../types.js'
 import { prepareAssetPrompt } from './preprocess.js'
-
-const buildLengthKey = (lengthArg: AssetSummaryContext['lengthArg']): string =>
-  lengthArg.kind === 'preset' ? `preset:${lengthArg.preset}` : `chars:${lengthArg.maxCharacters}`
-
-const buildLanguageKey = (outputLanguage: OutputLanguage): string =>
-  outputLanguage.kind === 'auto' ? 'auto' : outputLanguage.tag
-
-const buildPromptHash = (prompt: string): string => {
-  const instructions = extractTaggedBlock(prompt, 'instructions') ?? prompt
-  return hashString(instructions.trim())
-}
 
 const buildModelMetaFromAttempt = (attempt: ModelAttempt) => {
   if (attempt.transport === 'cli') {

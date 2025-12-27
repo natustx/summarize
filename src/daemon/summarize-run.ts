@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process'
 import { Writable } from 'node:stream'
 
-import { buildSummaryCacheKey, extractTaggedBlock, hashString } from '../cache.js'
+import { buildLanguageKey, buildLengthKey, buildPromptHash, buildSummaryCacheKey } from '../cache.js'
 import type { CacheStore } from '../cache.js'
+import type { LengthArg } from '../flags.js'
 import type { OutputLanguage } from '../language.js'
 import { resolveOutputLanguage } from '../language.js'
 import { parseGatewayStyleModelId } from '../llm/model-id.js'
@@ -25,6 +26,7 @@ import type { StreamSink } from './summarize.js'
 export type DaemonRunContext = {
   envForRun: Record<string, string | undefined>
   outputLanguage: OutputLanguage
+  lengthArg: LengthArg
   summaryLength: SummaryLengthTarget
   desiredOutputTokens: number | null
   metrics: ReturnType<typeof createRunMetrics>
@@ -42,21 +44,6 @@ export type DaemonRunContext = {
   ytDlpPath: string | null
   falApiKey: string | null
   openaiTranscriptionKey: string | null
-}
-
-function buildLengthKey(summaryLength: SummaryLengthTarget): string {
-  return typeof summaryLength === 'string'
-    ? `preset:${summaryLength}`
-    : `chars:${summaryLength.maxCharacters}`
-}
-
-function buildLanguageKey(outputLanguage: OutputLanguage): string {
-  return outputLanguage.kind === 'auto' ? 'auto' : outputLanguage.tag
-}
-
-function buildPromptHash(prompt: string): string {
-  const instructions = extractTaggedBlock(prompt, 'instructions') ?? prompt
-  return hashString(instructions.trim())
 }
 
 function createWritableFromSink(sink: StreamSink): NodeJS.WritableStream {
@@ -190,6 +177,7 @@ export function createDaemonRunContext({
       raw: languageRaw,
       fallback: outputLanguage ?? resolveOutputLanguage('auto'),
     }),
+    lengthArg,
     summaryLength,
     desiredOutputTokens,
     metrics,
@@ -324,7 +312,7 @@ export async function runPrompt({
 
   if (cacheStore && contentHash) {
     const promptHash = buildPromptHash(prompt)
-    const lengthKey = buildLengthKey(ctx.summaryLength)
+    const lengthKey = buildLengthKey(ctx.lengthArg)
     const languageKey = buildLanguageKey(ctx.outputLanguage)
 
     for (const attempt of attempts) {
@@ -382,7 +370,7 @@ export async function runPrompt({
 
   if (cacheStore && contentHash) {
     const promptHash = buildPromptHash(prompt)
-    const lengthKey = buildLengthKey(ctx.summaryLength)
+    const lengthKey = buildLengthKey(ctx.lengthArg)
     const languageKey = buildLanguageKey(ctx.outputLanguage)
     const key = buildSummaryCacheKey({
       contentHash,
