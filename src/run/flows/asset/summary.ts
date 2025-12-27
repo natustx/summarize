@@ -487,6 +487,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       writeFinishLine({
         stderr: ctx.stderr,
         elapsedMs: Date.now() - ctx.runStartedAtMs,
+        elapsedLabel: summaryFromCache ? 'Cached' : null,
         model: usedAttempt.userModelId,
         report: finishReport,
         costUsd,
@@ -529,6 +530,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
     writeFinishLine({
       stderr: ctx.stderr,
       elapsedMs: Date.now() - ctx.runStartedAtMs,
+      elapsedLabel: summaryFromCache ? 'Cached' : null,
       model: usedAttempt.userModelId,
       report,
       costUsd,

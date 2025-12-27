@@ -574,6 +574,7 @@ export async function summarizeExtractedUrl({
       writeFinishLine({
         stderr: io.stderr,
         elapsedMs: Date.now() - flags.runStartedAtMs,
+        elapsedLabel: summaryFromCache ? 'Cached' : null,
         label: extractionUi.finishSourceLabel,
         model: usedAttempt.userModelId,
         report: finishReport,
@@ -619,6 +620,7 @@ export async function summarizeExtractedUrl({
     writeFinishLine({
       stderr: io.stderr,
       elapsedMs: Date.now() - flags.runStartedAtMs,
+      elapsedLabel: summaryFromCache ? 'Cached' : null,
       label: extractionUi.finishSourceLabel,
       model: modelMeta.canonical,
       report,
