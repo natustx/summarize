@@ -4,7 +4,48 @@ import { extractCookiesFromSafari } from './twitter-cookies-safari.js'
 import type { CookieExtractionResult, CookieSource } from './twitter-cookies-utils.js'
 import { createEmptyCookies, normalizeValue } from './twitter-cookies-utils.js'
 
-const DEFAULT_SOURCES: CookieSource[] = ['safari', 'chrome', 'firefox']
+const DEFAULT_SOURCES: CookieSource[] = ['chrome', 'safari', 'firefox']
+const ENV_COOKIE_SOURCE_KEYS = ['TWITTER_COOKIE_SOURCE']
+const ENV_CHROME_PROFILE_KEYS = ['TWITTER_CHROME_PROFILE']
+const ENV_FIREFOX_PROFILE_KEYS = ['TWITTER_FIREFOX_PROFILE']
+
+function parseCookieSourceList(
+  value: string,
+  warnings: string[]
+): CookieSource[] | undefined {
+  const tokens = value
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0)
+  if (tokens.length === 0) return undefined
+  const result: CookieSource[] = []
+  for (const token of tokens) {
+    if (token === 'safari' || token === 'chrome' || token === 'firefox') {
+      if (!result.includes(token)) result.push(token)
+      continue
+    }
+    warnings.push(`Unknown cookie source "${token}" in TWITTER_COOKIE_SOURCE`)
+  }
+  return result.length > 0 ? result : undefined
+}
+
+function resolveEnvCookieSource(warnings: string[]): CookieSource[] | undefined {
+  for (const key of ENV_COOKIE_SOURCE_KEYS) {
+    const value = normalizeValue(process.env[key])
+    if (value) {
+      return parseCookieSourceList(value, warnings)
+    }
+  }
+  return undefined
+}
+
+function resolveEnvProfile(keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = normalizeValue(process.env[key])
+    if (value) return value
+  }
+  return undefined
+}
 
 export async function resolveTwitterCookies(options: {
   authToken?: string
@@ -16,7 +57,13 @@ export async function resolveTwitterCookies(options: {
   const warnings: string[] = []
   const cookies = createEmptyCookies()
 
-  const cookieSource = options.cookieSource
+  const envCookieSource = resolveEnvCookieSource(warnings)
+  const envChromeProfile = resolveEnvProfile(ENV_CHROME_PROFILE_KEYS)
+  const envFirefoxProfile = resolveEnvProfile(ENV_FIREFOX_PROFILE_KEYS)
+
+  const cookieSource = options.cookieSource ?? envCookieSource
+  const chromeProfile = options.chromeProfile ?? envChromeProfile
+  const firefoxProfile = options.firefoxProfile ?? envFirefoxProfile
 
   if (options.authToken) {
     cookies.authToken = options.authToken
@@ -74,7 +121,7 @@ export async function resolveTwitterCookies(options: {
     }
 
     if (source === 'chrome') {
-      const chromeResult = await extractCookiesFromChrome(options.chromeProfile)
+      const chromeResult = await extractCookiesFromChrome(chromeProfile)
       warnings.push(...chromeResult.warnings)
       if (chromeResult.cookies.authToken && chromeResult.cookies.ct0) {
         return { cookies: chromeResult.cookies, warnings }
@@ -83,7 +130,7 @@ export async function resolveTwitterCookies(options: {
     }
 
     if (source === 'firefox') {
-      const firefoxResult = await extractCookiesFromFirefox(options.firefoxProfile)
+      const firefoxResult = await extractCookiesFromFirefox(firefoxProfile)
       warnings.push(...firefoxResult.warnings)
       if (firefoxResult.cookies.authToken && firefoxResult.cookies.ct0) {
         return { cookies: firefoxResult.cookies, warnings }

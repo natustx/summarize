@@ -149,6 +149,34 @@ describe('twitter cookie extraction', () => {
     expect(result.cookies.source).toBe('Chrome default profile')
   })
 
+  it('falls back to a Chrome profile when Default is missing', async () => {
+    const fs = await import('node:fs')
+    const { execSync } = await import('node:child_process')
+    ;(fs.existsSync as unknown as vi.Mock).mockImplementation((path: string) => {
+      if (path.includes('Default/Cookies')) return false
+      if (path.includes('Profile 1/Cookies')) return true
+      return false
+    })
+    ;(fs.readdirSync as unknown as vi.Mock).mockReturnValue([
+      { name: 'Profile 1', isDirectory: () => true },
+      { name: 'Profile 2', isDirectory: () => true },
+    ])
+    ;(execSync as unknown as vi.Mock).mockReturnValue(
+      [
+        `auth_token|${Buffer.from('auth').toString('hex')}`,
+        `ct0|${Buffer.from('ct0token').toString('hex')}`,
+      ].join('\n')
+    )
+
+    const { extractCookiesFromChrome } = await import(
+      '../packages/core/src/content/transcript/providers/twitter-cookies-chrome.js'
+    )
+    const result = await extractCookiesFromChrome()
+    expect(result.cookies.authToken).toBe('auth')
+    expect(result.cookies.ct0).toBe('ct0token')
+    expect(result.cookies.source).toBe('Chrome profile "Profile 1"')
+  })
+
   it('extracts cookies from Firefox sqlite output', async () => {
     const fs = await import('node:fs')
     const { execSync } = await import('node:child_process')

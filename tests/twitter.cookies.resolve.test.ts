@@ -32,6 +32,9 @@ describe('twitter cookies resolver', () => {
     delete process.env.CT0
     delete process.env.TWITTER_AUTH_TOKEN
     delete process.env.TWITTER_CT0
+    delete process.env.TWITTER_COOKIE_SOURCE
+    delete process.env.TWITTER_CHROME_PROFILE
+    delete process.env.TWITTER_FIREFOX_PROFILE
   })
 
   it('uses explicit tokens without touching browsers', async () => {
@@ -70,6 +73,22 @@ describe('twitter cookies resolver', () => {
     expect(res.cookies.cookieHeader).toBe('auth_token=a; ct0=c')
     expect(mocks.safari).toHaveBeenCalledTimes(1)
     expect(mocks.chrome).not.toHaveBeenCalled()
+  })
+
+  it('uses cookie source order from env vars', async () => {
+    process.env.TWITTER_COOKIE_SOURCE = 'firefox, chrome'
+    process.env.TWITTER_FIREFOX_PROFILE = 'default-release'
+    mocks.firefox.mockResolvedValue({
+      cookies: { authToken: 'a', ct0: 'c', cookieHeader: 'auth_token=a; ct0=c', source: 'Firefox' },
+      warnings: [],
+    })
+    const mod = await import('../packages/core/src/content/transcript/providers/twitter-cookies.js')
+
+    const res = await mod.resolveTwitterCookies({})
+    expect(res.cookies.source).toBe('Firefox')
+    expect(mocks.safari).not.toHaveBeenCalled()
+    expect(mocks.chrome).not.toHaveBeenCalled()
+    expect(mocks.firefox).toHaveBeenCalledWith('default-release')
   })
 
   it('falls back to the next browser when needed', async () => {

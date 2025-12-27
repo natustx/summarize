@@ -14,7 +14,7 @@
   - Streaming over SSE
   - Emit finish-line metrics over SSE (panel footer + hover details)
   - Commands: `install`, `status`, `restart`, `uninstall`, `run`
-- X/Twitter: auto-transcribe tweet videos via `yt-dlp`, using browser cookies (Safari/Chrome/Firefox) when available.
+- X/Twitter: auto-transcribe tweet videos via `yt-dlp`, using browser cookies (Chrome → Safari → Firefox) when available; set `TWITTER_COOKIE_SOURCE` / `TWITTER_*_PROFILE` to control cookie extraction order.
 
 ### Fixed
 

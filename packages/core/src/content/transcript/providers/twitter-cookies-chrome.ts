@@ -1,15 +1,57 @@
 import { execSync } from 'node:child_process'
 import { createDecipheriv, pbkdf2Sync } from 'node:crypto'
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CookieExtractionResult, TwitterCookies } from './twitter-cookies-utils.js'
 import { createEmptyCookies, serializeCookieJar } from './twitter-cookies-utils.js'
 
-function getChromeCookiesPath(profile?: string): string {
+function getChromeProfilesRoot(): string {
   const home = process.env.HOME || ''
-  const profileDir = profile || 'Default'
-  return join(home, 'Library', 'Application Support', 'Google', 'Chrome', profileDir, 'Cookies')
+  return join(home, 'Library', 'Application Support', 'Google', 'Chrome')
+}
+
+function resolveChromeCookiesPath(profile?: string): { path: string; profile: string } | null {
+  const root = getChromeProfilesRoot()
+  if (profile) {
+    const candidate = join(root, profile, 'Cookies')
+    return existsSync(candidate) ? { path: candidate, profile } : null
+  }
+
+  const defaultPath = join(root, 'Default', 'Cookies')
+  if (existsSync(defaultPath)) {
+    return { path: defaultPath, profile: 'Default' }
+  }
+
+  try {
+    const entries = readdirSync(root, { withFileTypes: true })
+    const candidates = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => name !== 'Default')
+    const profileCandidates = candidates
+      .filter((name) => name.startsWith('Profile '))
+      .sort((a, b) => {
+        const aMatch = a.match(/^Profile (\d+)$/)
+        const bMatch = b.match(/^Profile (\d+)$/)
+        if (aMatch && bMatch) {
+          return Number(aMatch[1]) - Number(bMatch[1])
+        }
+        return a.localeCompare(b)
+      })
+    const fallbackCandidates = [...profileCandidates, ...candidates.filter((n) => !n.startsWith('Profile '))]
+
+    for (const name of fallbackCandidates) {
+      const candidate = join(root, name, 'Cookies')
+      if (existsSync(candidate)) {
+        return { path: candidate, profile: name }
+      }
+    }
+  } catch {
+    return null
+  }
+
+  return null
 }
 
 function decryptCookieValue(encryptedHex: string): string | null {
@@ -64,11 +106,16 @@ export async function extractCookiesFromChrome(profile?: string): Promise<Cookie
   const warnings: string[] = []
   const cookies: TwitterCookies = createEmptyCookies()
 
-  const cookiesPath = getChromeCookiesPath(profile)
-  if (!existsSync(cookiesPath)) {
-    warnings.push(`Chrome cookies database not found at: ${cookiesPath}`)
+  const selection = resolveChromeCookiesPath(profile)
+  if (!selection) {
+    const root = getChromeProfilesRoot()
+    const detail = profile
+      ? `Chrome cookies database not found at: ${join(root, profile, 'Cookies')}`
+      : `Chrome cookies database not found under: ${root}`
+    warnings.push(detail)
     return { cookies, warnings }
   }
+  const cookiesPath = selection.path
 
   let tempDir: string | null = null
 
@@ -117,7 +164,10 @@ export async function extractCookiesFromChrome(profile?: string): Promise<Cookie
     }
 
     if (cookies.authToken || cookies.ct0) {
-      cookies.source = profile ? `Chrome profile "${profile}"` : 'Chrome default profile'
+      cookies.source =
+        selection.profile === 'Default'
+          ? 'Chrome default profile'
+          : `Chrome profile "${selection.profile}"`
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
