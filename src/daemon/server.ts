@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import http from 'node:http'
 
+import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import type { DaemonConfig } from './config.js'
 import { DAEMON_HOST, DAEMON_PORT_DEFAULT } from './constants.js'
 import { streamSummaryForUrl, streamSummaryForVisiblePage } from './summarize.js'
@@ -203,16 +204,18 @@ export async function runDaemonServer({
         const truncated = Boolean(obj.truncated)
         const modelOverride = typeof obj.model === 'string' ? obj.model.trim() : null
         const modeRaw = typeof obj.mode === 'string' ? obj.mode.trim().toLowerCase() : ''
-        const mode: 'page' | 'url' = modeRaw === 'url' ? 'url' : 'page'
+        const mode: DaemonRequestedMode =
+          modeRaw === 'url' ? 'url' : modeRaw === 'page' ? 'page' : 'auto'
         const maxCharacters =
           typeof obj.maxCharacters === 'number' && Number.isFinite(obj.maxCharacters)
             ? obj.maxCharacters
             : null
+        const hasText = Boolean(textContent.trim())
         if (!pageUrl || !/^https?:\/\//i.test(pageUrl)) {
           json(res, 400, { ok: false, error: 'missing url' }, cors)
           return
         }
-        if (mode === 'page' && !textContent.trim()) {
+        if (mode === 'page' && !hasText) {
           json(res, 400, { ok: false, error: 'missing text' }, cors)
           return
         }
@@ -224,12 +227,15 @@ export async function runDaemonServer({
 
         void (async () => {
           try {
+            let emittedOutput = false
             const sink = {
               writeChunk: (chunk: string) => {
+                emittedOutput = true
                 pushToSession(session, { event: 'chunk', data: { text: chunk } })
               },
               onModelChosen: (modelId: string) => {
                 if (session.lastModel === modelId) return
+                emittedOutput = true
                 session.lastModel = modelId
                 pushToSession(session, { event: 'meta', data: { model: modelId } })
               },
@@ -239,28 +245,51 @@ export async function runDaemonServer({
                 pushToSession(session, { event: 'status', data: { text: clean } })
               },
             }
-            const result =
-              mode === 'url'
+
+            const normalizedModelOverride =
+              modelOverride && modelOverride.toLowerCase() !== 'auto' ? modelOverride : null
+
+            const runWithMode = async (resolved: 'url' | 'page') => {
+              return resolved === 'url'
                 ? await streamSummaryForUrl({
                     env,
                     fetchImpl,
-                    modelOverride:
-                      modelOverride && modelOverride.toLowerCase() !== 'auto'
-                        ? modelOverride
-                        : null,
+                    modelOverride: normalizedModelOverride,
                     input: { url: pageUrl, title, maxCharacters },
                     sink,
                   })
                 : await streamSummaryForVisiblePage({
                     env,
                     fetchImpl,
-                    modelOverride:
-                      modelOverride && modelOverride.toLowerCase() !== 'auto'
-                        ? modelOverride
-                        : null,
+                    modelOverride: normalizedModelOverride,
                     input: { url: pageUrl, title, text: textContent, truncated },
                     sink,
                   })
+            }
+
+            const result = await (async () => {
+              if (mode !== 'auto') return runWithMode(mode)
+
+              const { primary, fallback } = resolveAutoDaemonMode({ url: pageUrl, hasText })
+
+              try {
+                return await runWithMode(primary)
+              } catch (error) {
+                if (!fallback || emittedOutput) throw error
+
+                sink.writeStatus?.('Primary failed. Trying fallback…')
+                try {
+                  return await runWithMode(fallback)
+                } catch (fallbackError) {
+                  const primaryMessage = error instanceof Error ? error.message : String(error)
+                  const fallbackMessage =
+                    fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+                  throw new Error(
+                    `Auto mode failed.\nPrimary (${primary}): ${primaryMessage}\nFallback (${fallback}): ${fallbackMessage}`
+                  )
+                }
+              }
+            })()
 
             if (!session.lastModel) {
               session.lastModel = result.usedModel
