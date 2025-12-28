@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 
 import { mergeStreamingChunk } from '../../../../../src/shared/streaming-merge.js'
 import { buildIdleSubtitle } from '../../lib/header'
+import { buildMetricsParts, buildMetricsTokens } from '../../lib/metrics'
 import { defaultSettings, loadSettings, patchSettings } from '../../lib/settings'
 import { parseSseStream } from '../../lib/sse'
 import { splitStatusPercent } from '../../lib/status'
@@ -276,10 +277,6 @@ function queueRender() {
   }, 80)
 }
 
-const isHttpUrl = (value: string) => /^https?:\/\//i.test(value)
-const isLikelyDomain = (value: string) =>
-  /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(value) && !value.includes('..')
-
 function getLineHeightPx(el: HTMLElement, styles?: CSSStyleDeclaration): number {
   const resolved = styles ?? getComputedStyle(el)
   const lineHeightRaw = resolved.lineHeight
@@ -374,7 +371,10 @@ function scheduleMetricsFitCheck() {
   metricsRenderState.rafId = window.requestAnimationFrame(() => {
     metricsRenderState.rafId = null
     if (!metricsRenderState.summary) return
-    const parts = getMetricsParts(metricsRenderState.summary)
+    const parts = buildMetricsParts({
+      summary: metricsRenderState.summary,
+      inputSummary: lastMeta.inputSummary,
+    })
     if (parts.length === 0) return
     const fullText = parts.join(' · ')
     if (!/\bopenrouter\//i.test(fullText)) return
@@ -389,90 +389,38 @@ function scheduleMetricsFitCheck() {
   })
 }
 
-function getMetricsParts(
-  summary: string,
-  options?: { shortenOpenRouter?: boolean }
-): string[] {
-  const shortenOpenRouter = options?.shortenOpenRouter ?? false
-
-  const inputSummary = lastMeta.inputSummary?.trim() ?? ''
-  const inputParts = inputSummary
-    ? inputSummary
-        .split(' · ')
-        .map((part) => part.trim())
-        .filter(Boolean)
-    : []
-  const inputHasWords = inputParts.some((part) => /\bwords\b/i.test(part))
-  const inputHasMediaDuration = inputParts.some((part) => {
-    if (!/\b(YouTube|podcast|video)\b/i.test(part)) return false
-    return /\bmin\b/i.test(part) || /\b\d+m\b/i.test(part) || /\b\d+s\b/i.test(part)
-  })
-  const normalize = (value: string) => value.replaceAll(/\s+/g, ' ').trim().toLowerCase()
-  const inputPartsNormalized = new Set(inputParts.map(normalize))
-
-  const shouldOmitPart = (raw: string) => {
-    const trimmed = raw.trim()
-    if (!trimmed) return true
-    if (inputPartsNormalized.has(normalize(trimmed))) return true
-    if (inputHasWords && /\bwords\b/i.test(trimmed)) return true
-    if (
-      inputHasMediaDuration &&
-      /\b(YouTube|podcast|video)\b/i.test(trimmed) &&
-      (/\bmin\b/i.test(trimmed) || /\b\d+m\b/i.test(trimmed) || /\b\d+s\b/i.test(trimmed))
-    ) {
-      return true
-    }
-    return false
-  }
-
-  return summary
-    .split(' · ')
-    .filter((part) => !shouldOmitPart(part))
-    .map((part) => {
-      if (!shortenOpenRouter) return part
-      const trimmed = part.trim()
-      if (!/^openrouter\//i.test(trimmed)) return part
-      return trimmed.replace(/^openrouter\//i, 'or/')
-    })
-}
-
 function renderMetricsSummary(summary: string, options?: { shortenOpenRouter?: boolean }) {
   metricsEl.replaceChildren()
+  const tokens = buildMetricsTokens({
+    summary,
+    inputSummary: lastMeta.inputSummary,
+    sourceUrl: currentSource?.url ?? null,
+    shortenOpenRouter: options?.shortenOpenRouter ?? false,
+  })
 
-  const parts = getMetricsParts(summary, options)
-
-  parts.forEach((part, index) => {
+  tokens.forEach((token, index) => {
     if (index) metricsEl.append(document.createTextNode(' · '))
-    const trimmed = part.trim()
-    if (!trimmed) return
-    if (isHttpUrl(trimmed) || isLikelyDomain(trimmed)) {
+    if (token.kind === 'link') {
       const link = document.createElement('a')
-      link.href = isHttpUrl(trimmed) ? trimmed : `https://${trimmed}`
-      link.textContent = trimmed
+      link.href = token.href
+      link.textContent = token.text
       link.target = '_blank'
       link.rel = 'noopener noreferrer'
       metricsEl.append(link)
       return
     }
-    const sourceUrl = currentSource?.url ?? null
-    if (sourceUrl && isHttpUrl(sourceUrl)) {
-      const sourceMatch = part.match(/\b(YouTube|podcast|video)\b/i)
-      if (sourceMatch?.index != null) {
-        const before = part.slice(0, sourceMatch.index)
-        const label = sourceMatch[0]
-        const after = part.slice(sourceMatch.index + label.length)
-        if (before) metricsEl.append(document.createTextNode(before))
-        const link = document.createElement('a')
-        link.href = sourceUrl
-        link.textContent = label
-        link.target = '_blank'
-        link.rel = 'noopener noreferrer'
-        metricsEl.append(link)
-        if (after) metricsEl.append(document.createTextNode(after))
-        return
-      }
+    if (token.kind === 'media') {
+      if (token.before) metricsEl.append(document.createTextNode(token.before))
+      const link = document.createElement('a')
+      link.href = token.href
+      link.textContent = token.label
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+      metricsEl.append(link)
+      if (token.after) metricsEl.append(document.createTextNode(token.after))
+      return
     }
-    metricsEl.append(document.createTextNode(part))
+    metricsEl.append(document.createTextNode(token.text))
   })
 }
 
