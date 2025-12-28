@@ -444,6 +444,7 @@ details.advanced[open] > summary::after {
 label {
   display: grid;
   gap: 5px;
+  min-width: 0;
 }
 
 label > span {
@@ -473,6 +474,17 @@ select {
   outline: none;
   font-family: var(--mono);
   font-size: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 select {
@@ -507,6 +519,10 @@ select {
   font: inherit;
   cursor: pointer;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pickerTrigger[data-state="open"] {
@@ -689,6 +705,11 @@ textarea {
 .combo {
   display: grid;
   gap: 5px;
+  min-width: 0;
+}
+
+.combo > * {
+  min-width: 0;
 }
 
 .row {
