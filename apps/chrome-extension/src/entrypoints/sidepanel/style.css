@@ -859,20 +859,20 @@ select {
 }
 
 .pickerPositioner[data-picker="length"] .pickerContent {
-  min-width: min(240px, 100%);
+  min-width: min(260px, 100%);
 }
 
 .pickerPositioner[data-picker="length"] {
-  width: max(240px, var(--reference-width, 0px));
+  width: min(max(260px, calc(var(--reference-width, 0px) + 60px)), var(--available-width, 100vw));
   max-width: var(--available-width, 100vw);
 }
 
 .pickerPositioner[data-picker="scheme"] .pickerContent {
-  min-width: min(230px, 100%);
+  min-width: min(250px, 100%);
 }
 
 .pickerPositioner[data-picker="scheme"] {
-  width: max(230px, var(--reference-width, 0px));
+  width: min(max(250px, calc(var(--reference-width, 0px) + 60px)), var(--available-width, 100vw));
   max-width: var(--available-width, 100vw);
 }
 
