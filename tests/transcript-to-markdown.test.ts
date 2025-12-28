@@ -4,6 +4,7 @@ const generateTextWithModelIdMock = vi.fn(async () => ({
   text: '# Formatted Transcript\n\nThis is a well-structured transcript.',
   canonicalModelId: 'openai/gpt-5.2',
   provider: 'openai',
+  usage: null,
 }))
 
 vi.mock('../src/llm/generate-text.js', () => ({
@@ -127,7 +128,7 @@ describe('Transcript→Markdown converter', async () => {
     expect(onUsageMock).toHaveBeenCalledWith({
       model: 'openai/gpt-5.2',
       provider: 'openai',
-      usage: undefined,
+      usage: null,
     })
   })
 

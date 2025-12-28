@@ -3,11 +3,21 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { runCli } from '../src/run.js'
 
+const mocks = vi.hoisted(() => ({
+  generateTextWithModelId: vi.fn(async () => ({
+    text: '# How to Speak\n\nHello everyone. Today we talk about speaking.',
+    canonicalModelId: 'openai/gpt-5-mini',
+    provider: 'openai',
+    usage: null,
+  })),
+}))
+
+vi.mock('../src/llm/generate-text.js', () => ({
+  generateTextWithModelId: mocks.generateTextWithModelId,
+}))
+
 const jsonResponse = (payload: unknown, status = 200) =>
-  Response.json(payload, {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  })
+  Response.json(payload, { status, headers: { 'Content-Type': 'application/json' } })
 
 const htmlResponse = (html: string, status = 200) =>
   new Response(html, {
@@ -17,13 +27,14 @@ const htmlResponse = (html: string, status = 200) =>
 
 describe('cli --extract --format md --markdown-mode llm (transcript markdownify)', () => {
   it('converts YouTube transcript to markdown via LLM when --markdown-mode llm is specified', async () => {
+    mocks.generateTextWithModelId.mockClear()
     const youtubeHtml =
       '<!doctype html><html><head><title>How to Speak</title><meta name="description" content="MIT lecture" />' +
       '<script>ytcfg.set({"INNERTUBE_API_KEY":"TEST_KEY","INNERTUBE_CONTEXT":{"client":{"clientName":"WEB","clientVersion":"1.0"}},"INNERTUBE_CONTEXT_CLIENT_NAME":1});</script>' +
       '<script>var ytInitialPlayerResponse = {"captions":{"playerCaptionsTracklistRenderer":{"captionTracks":[{"baseUrl":"https://example.com/captions"}]}},"getTranscriptEndpoint":{"params":"TEST_PARAMS"}};</script>' +
       '</head><body><main><p>Fallback</p></main></body></html>'
 
-    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>((input, init) => {
+    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>((input) => {
       const url = typeof input === 'string' ? input : (input?.url ?? '')
 
       // YouTube page fetch
@@ -52,7 +63,9 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
                                 },
                                 {
                                   transcriptSegmentRenderer: {
-                                    snippet: { runs: [{ text: 'Um, today we talk about speaking.' }] },
+                                    snippet: {
+                                      runs: [{ text: 'Um, today we talk about speaking.' }],
+                                    },
                                   },
                                 },
                               ],
@@ -65,34 +78,6 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
                 },
               },
             ],
-          })
-        )
-      }
-
-      // OpenRouter API call for transcript→markdown conversion
-      if (url.includes('openrouter.ai') || url.includes('openai.com')) {
-        const body = JSON.parse((init?.body as string) ?? '{}')
-        // Verify the prompt contains transcript-specific instructions
-        const systemMessage = body.messages?.find((m: { role: string }) => m.role === 'system')
-        expect(systemMessage?.content).toContain('convert raw transcripts')
-
-        return Promise.resolve(
-          jsonResponse({
-            id: 'test-id',
-            object: 'chat.completion',
-            created: Date.now(),
-            model: 'openai/gpt-5-mini',
-            choices: [
-              {
-                index: 0,
-                message: {
-                  role: 'assistant',
-                  content: '# How to Speak\n\nHello everyone. Today we talk about speaking.',
-                },
-                finish_reason: 'stop',
-              },
-            ],
-            usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
           })
         )
       }
@@ -136,6 +121,13 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
     )
 
     const output = stdoutChunks.join('')
+    expect(mocks.generateTextWithModelId).toHaveBeenCalledTimes(1)
+    const generateArgs = (mocks.generateTextWithModelId.mock.calls[0]?.[0] ?? {}) as {
+      system?: string
+      prompt?: string
+    }
+    expect(generateArgs.system).toContain('convert raw transcripts')
+    expect(generateArgs.prompt).toContain('SPEAKER: Hello everyone')
     // Should contain the LLM-formatted markdown, not raw transcript
     expect(output).toContain('# How to Speak')
     expect(output).toContain('Hello everyone')
@@ -144,6 +136,7 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
   })
 
   it('outputs raw transcript when --markdown-mode is not llm (default behavior)', async () => {
+    mocks.generateTextWithModelId.mockClear()
     const youtubeHtml =
       '<!doctype html><html><head><title>Test Video</title>' +
       '<script>ytcfg.set({"INNERTUBE_API_KEY":"TEST_KEY","INNERTUBE_CONTEXT":{"client":{"clientName":"WEB","clientVersion":"1.0"}},"INNERTUBE_CONTEXT_CLIENT_NAME":1});</script>' +
@@ -194,11 +187,6 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
         )
       }
 
-      // Should NOT call any LLM API
-      if (url.includes('openrouter.ai') || url.includes('openai.com')) {
-        throw new Error('LLM API should not be called without --markdown-mode llm')
-      }
-
       return Promise.reject(new Error(`Unexpected fetch call: ${url}`))
     })
 
@@ -210,17 +198,15 @@ describe('cli --extract --format md --markdown-mode llm (transcript markdownify)
       },
     })
 
-    await runCli(
-      ['--extract', '--timeout', '10s', 'https://www.youtube.com/watch?v=abcdefghijk'],
-      {
-        env: { OPENROUTER_API_KEY: 'test-key' },
-        fetch: fetchMock as unknown as typeof fetch,
-        stdout,
-        stderr: new Writable({ write: (_c, _e, cb) => cb() }),
-      }
-    )
+    await runCli(['--extract', '--timeout', '10s', 'https://www.youtube.com/watch?v=abcdefghijk'], {
+      env: { OPENROUTER_API_KEY: 'test-key' },
+      fetch: fetchMock as unknown as typeof fetch,
+      stdout,
+      stderr: new Writable({ write: (_c, _e, cb) => cb() }),
+    })
 
     const output = stdoutChunks.join('')
+    expect(mocks.generateTextWithModelId).toHaveBeenCalledTimes(0)
     // Should contain raw transcript
     expect(output).toContain('Raw transcript line one')
     expect(output).toContain('Raw transcript line two')

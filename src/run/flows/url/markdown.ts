@@ -1,9 +1,9 @@
 import { createHtmlToMarkdownConverter } from '../../../llm/html-to-markdown.js'
-import {
-  createTranscriptToMarkdownConverter,
-  type ConvertTranscriptToMarkdown,
-} from '../../../llm/transcript-to-markdown.js'
 import { parseGatewayStyleModelId } from '../../../llm/model-id.js'
+import {
+  type ConvertTranscriptToMarkdown,
+  createTranscriptToMarkdownConverter,
+} from '../../../llm/transcript-to-markdown.js'
 import { convertToMarkdownWithMarkitdown } from '../../../markitdown.js'
 import { hasUvxCli } from '../../env.js'
 import { createRetryLogger } from '../../logging.js'
@@ -146,7 +146,11 @@ export function createMarkdownConverters(
             : Boolean(ctx.model.apiStatus.apiKey)
   })()
 
-  if ((markdownRequested || transcriptMarkdownRequested) && effectiveMarkdownMode === 'llm' && !hasKeyForMarkdownModel) {
+  if (
+    (markdownRequested || transcriptMarkdownRequested) &&
+    effectiveMarkdownMode === 'llm' &&
+    !hasKeyForMarkdownModel
+  ) {
     const required = (() => {
       if (markdownModel?.forceOpenRouter) return 'OPENROUTER_API_KEY'
       if (markdownModel?.requiredEnv === 'Z_AI_API_KEY') return 'Z_AI_API_KEY'

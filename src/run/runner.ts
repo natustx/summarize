@@ -364,7 +364,7 @@ export async function runCli(
       throw new Error('--markdown-mode is only supported with --format md')
     }
     if (markdownModeExplicitlySet && inputTarget.kind !== 'url') {
-      throw new Error('--markdown-mode is only supported for website URLs')
+      throw new Error('--markdown-mode is only supported for URL inputs')
     }
     const metrics = createRunMetrics({
       env,

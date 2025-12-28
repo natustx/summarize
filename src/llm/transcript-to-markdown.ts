@@ -103,7 +103,11 @@ export function createTranscriptToMarkdownConverter({
       retries,
       onRetry,
     })
-    onUsage?.({ model: result.canonicalModelId, provider: result.provider, usage: result.usage })
+    onUsage?.({
+      model: result.canonicalModelId,
+      provider: result.provider,
+      usage: result.usage ?? null,
+    })
     return result.text
   }
 }

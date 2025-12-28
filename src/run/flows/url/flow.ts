@@ -77,7 +77,7 @@ export async function runUrlFlow({
   writeVerbose(
     io.stderr,
     flags.verbose,
-    `markdown requested=${markdown.markdownRequested} provider=${markdown.markdownProvider}`,
+    `markdown htmlRequested=${markdown.markdownRequested} transcriptRequested=${markdown.transcriptMarkdownRequested} provider=${markdown.markdownProvider}`,
     flags.verboseColor
   )
 
