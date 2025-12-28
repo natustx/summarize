@@ -896,7 +896,7 @@ select:focus {
 }
 
 input[type="range"] {
-  width: 90px;
+  width: 100%;
 }
 
 .drawerFooter {
