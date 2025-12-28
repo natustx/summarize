@@ -646,10 +646,11 @@ label.length.mini {
 }
 
 label.length.mini .combo {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 120px);
   gap: 8px;
   width: 100%;
+  align-items: center;
 }
 
 label.length.mini .picker {
@@ -663,8 +664,8 @@ label.length.mini .pickerTrigger {
 }
 
 label.length.mini input[type="text"] {
-  flex: 1 0 100%;
   width: 100%;
+  min-width: 0;
 }
 
 .drawer .combo {
