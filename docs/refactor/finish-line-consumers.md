@@ -7,19 +7,19 @@ summary: "Refactor guide: share finish-line assembly across CLI + daemon."
 Goal: one shared finish‑line assembly path for CLI + daemon.
 
 ## Steps
-- [ ] Inventory finish‑line usage.
+- [x] Inventory finish‑line usage.
   - Files: `src/run/finish-line.ts`, `src/daemon/summarize.ts`, `src/run/runner.ts`.
-- [ ] Define `FinishLinePayload` model.
+- [x] Define `FinishLinePayload` model.
   - Input: elapsed, tokens, model label, extras, cache flag.
-- [ ] Add shared helper.
+- [x] Add shared helper.
   - New `buildFinishLinePayload()` in `finish-line.ts` or new module.
-- [ ] Update daemon metrics to use helper.
+- [x] Update daemon metrics to use helper.
   - Replace local assembly in `buildDaemonMetrics`.
-- [ ] Update CLI to use helper.
+- [x] Update CLI to use helper.
   - Ensure same model label normalization.
-- [ ] Extend tests.
+- [x] Extend tests.
   - Add daemon metric formatting test for parity.
-- [ ] Verify output parity.
+- [x] Verify output parity.
 
 ## Done When
 - CLI + daemon produce identical label formatting.

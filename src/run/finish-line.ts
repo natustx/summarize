@@ -210,16 +210,17 @@ export function writeFinishLine({
   extraParts?: string[] | null
   color: boolean
 }): void {
-  const text = buildFinishLineText({
+  const { compact, detailed: detailedText } = buildFinishLineVariants({
     elapsedMs,
     elapsedLabel,
     label,
     model,
     report,
     costUsd,
-    detailed,
-    extraParts,
+    compactExtraParts: extraParts,
+    detailedExtraParts: extraParts,
   })
+  const text = detailed ? detailedText : compact
 
   stderr.write('\n')
   stderr.write(`${ansi('1;32', text.line, color)}\n`)
@@ -265,6 +266,56 @@ export function buildFinishLineText({
     extraParts,
   })
   return formatFinishLineText(modelData, detailed)
+}
+
+export function buildFinishLineVariants({
+  elapsedMs,
+  elapsedLabel,
+  label,
+  model,
+  report,
+  costUsd,
+  compactExtraParts,
+  detailedExtraParts,
+}: {
+  elapsedMs: number
+  elapsedLabel?: string | null
+  label?: string | null
+  model: string | null
+  report: {
+    llm: Array<{
+      promptTokens: number | null
+      completionTokens: number | null
+      totalTokens: number | null
+      calls: number
+    }>
+    services: { firecrawl: { requests: number }; apify: { requests: number } }
+  }
+  costUsd: number | null
+  compactExtraParts?: string[] | null
+  detailedExtraParts?: string[] | null
+}): { compact: FinishLineText; detailed: FinishLineText } {
+  const compact = buildFinishLineText({
+    elapsedMs,
+    elapsedLabel,
+    label,
+    model,
+    report,
+    costUsd,
+    detailed: false,
+    extraParts: compactExtraParts ?? detailedExtraParts ?? null,
+  })
+  const detailed = buildFinishLineText({
+    elapsedMs,
+    elapsedLabel,
+    label,
+    model,
+    report,
+    costUsd,
+    detailed: true,
+    extraParts: detailedExtraParts ?? compactExtraParts ?? null,
+  })
+  return { compact, detailed }
 }
 
 export function formatFinishLineText(model: FinishLineModel, detailed: boolean): FinishLineText {

@@ -1,7 +1,7 @@
 import type { CacheState } from '../cache.js'
 import { type ExtractedLinkContent, isYouTubeUrl } from '../content/index.js'
 import type { RunMetricsReport } from '../costs.js'
-import { buildFinishLineText, buildLengthPartsForFinishLine } from '../run/finish-line.js'
+import { buildFinishLineVariants, buildLengthPartsForFinishLine } from '../run/finish-line.js'
 import { deriveExtractionUi } from '../run/flows/url/extract.js'
 import { runUrlFlow } from '../run/flows/url/flow.js'
 import { buildUrlPrompt, summarizeExtractedUrl } from '../run/flows/url/summary.js'
@@ -61,33 +61,23 @@ function buildDaemonMetrics({
   detailedExtraParts: string[] | null
 }): VisiblePageMetrics {
   const elapsedLabel = summaryFromCache ? 'Cached' : null
-  const compact = buildFinishLineText({
+  const { compact, detailed } = buildFinishLineVariants({
     elapsedMs,
     elapsedLabel,
     label,
     model: modelLabel,
     report,
     costUsd,
-    detailed: false,
-    extraParts: compactExtraParts,
-  })
-  const extended = buildFinishLineText({
-    elapsedMs,
-    elapsedLabel,
-    label,
-    model: modelLabel,
-    report,
-    costUsd,
-    detailed: true,
-    extraParts: detailedExtraParts,
+    compactExtraParts,
+    detailedExtraParts,
   })
 
   return {
     elapsedMs,
     summary: compact.line,
     details: compact.details,
-    summaryDetailed: extended.line,
-    detailsDetailed: extended.details,
+    summaryDetailed: detailed.line,
+    detailsDetailed: detailed.details,
   }
 }
 
