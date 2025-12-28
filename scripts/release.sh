@@ -49,6 +49,25 @@ phase_build() {
   phase_chrome
 }
 
+phase_verify_pack() {
+  banner "Verify pack"
+  require_lockstep_versions
+  local version tmp_dir tarball install_dir
+  version="$(node -p 'require("./package.json").version')"
+  tmp_dir="$(mktemp -d)"
+  tarball="${tmp_dir}/steipete-summarize-${version}.tgz"
+  run pnpm pack --pack-destination "${tmp_dir}"
+  if [ ! -f "${tarball}" ]; then
+    echo "Missing ${tarball}"
+    exit 1
+  fi
+  install_dir="${tmp_dir}/install"
+  run mkdir -p "${install_dir}"
+  run npm install --silent --prefix "${install_dir}" "${tarball}"
+  run node "${install_dir}/node_modules/@steipete/summarize/dist/cli.js" --help >/dev/null
+  echo "ok"
+}
+
 phase_chrome() {
   banner "Chrome extension"
   local version root_dir output_dir zip_path
@@ -96,6 +115,7 @@ phase_tag() {
 case "$PHASE" in
   gates) phase_gates ;;
   build) phase_build ;;
+  verify) phase_verify_pack ;;
   publish) phase_publish ;;
   smoke) phase_smoke ;;
   tag) phase_tag ;;
@@ -103,6 +123,7 @@ case "$PHASE" in
   all)
     phase_gates
     phase_build
+    phase_verify_pack
     phase_publish
     phase_smoke
     phase_tag
@@ -113,11 +134,12 @@ case "$PHASE" in
     echo "Phases:"
     echo "  gates     pnpm check"
     echo "  build     pnpm build"
+    echo "  verify    pack + install tarball + --help"
     echo "  publish   pnpm publish --tag latest --access public"
     echo "  smoke     npm view + pnpm dlx @steipete/summarize --help"
     echo "  tag       git tag vX.Y.Z + push tags"
     echo "  chrome    build + zip Chrome extension"
-    echo "  all       gates + build + publish + smoke + tag"
+    echo "  all       gates + build + verify + publish + smoke + tag"
     exit 2
     ;;
 esac

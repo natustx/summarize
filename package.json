@@ -1,6 +1,6 @@
 {
   "name": "@steipete/summarize",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Link → clean text → summary.",
   "type": "module",
   "bin": {
@@ -63,7 +63,15 @@
   "dependencies": {
     "@mariozechner/pi-ai": "^0.30.2",
     "@steipete/summarize-core": "workspace:*",
-    "commander": "^14.0.2"
+    "commander": "^14.0.2",
+    "file-type": "^21.2.0",
+    "gpt-tokenizer": "^3.4.0",
+    "json5": "^2.2.3",
+    "markdansi": "^0.2.0",
+    "mime": "^4.1.0",
+    "ora": "^9.0.0",
+    "osc-progress": "github:steipete/osc-progress#v0.2.0",
+    "tokentally": "github:steipete/tokentally#v0.1.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
@@ -73,16 +81,8 @@
     "@types/sanitize-html": "^2.16.0",
     "@vitest/coverage-v8": "^4.0.16",
     "esbuild": "^0.27.2",
-    "file-type": "^21.2.0",
-    "gpt-tokenizer": "^3.4.0",
-    "json5": "^2.2.3",
-    "markdansi": "^0.2.0",
-    "mime": "^4.1.0",
-    "ora": "^9.0.0",
-    "osc-progress": "github:steipete/osc-progress#v0.2.0",
     "oxlint": "^1.35.0",
     "oxlint-tsgolint": "^0.10.0",
-    "tokentally": "github:steipete/tokentally#v0.1.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"

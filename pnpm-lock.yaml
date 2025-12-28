@@ -20,6 +20,30 @@ importers:
       commander:
         specifier: ^14.0.2
         version: 14.0.2
+      file-type:
+        specifier: ^21.2.0
+        version: 21.2.0
+      gpt-tokenizer:
+        specifier: ^3.4.0
+        version: 3.4.0
+      json5:
+        specifier: ^2.2.3
+        version: 2.2.3
+      markdansi:
+        specifier: ^0.2.0
+        version: 0.2.0
+      mime:
+        specifier: ^4.1.0
+        version: 4.1.0
+      ora:
+        specifier: ^9.0.0
+        version: 9.0.0
+      osc-progress:
+        specifier: github:steipete/osc-progress#v0.2.0
+        version: https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850
+      tokentally:
+        specifier: github:steipete/tokentally#v0.1.0
+        version: https://codeload.github.com/steipete/tokentally/tar.gz/99865e5c16f5340c9589a2c5d85c3ea47dbcec82
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.3.10
@@ -42,36 +66,12 @@ importers:
       esbuild:
         specifier: ^0.27.2
         version: 0.27.2
-      file-type:
-        specifier: ^21.2.0
-        version: 21.2.0
-      gpt-tokenizer:
-        specifier: ^3.4.0
-        version: 3.4.0
-      json5:
-        specifier: ^2.2.3
-        version: 2.2.3
-      markdansi:
-        specifier: ^0.2.0
-        version: 0.2.0
-      mime:
-        specifier: ^4.1.0
-        version: 4.1.0
-      ora:
-        specifier: ^9.0.0
-        version: 9.0.0
-      osc-progress:
-        specifier: github:steipete/osc-progress#v0.2.0
-        version: https://codeload.github.com/steipete/osc-progress/tar.gz/44bd742691cda9a11c08bcd27ec69aaf4576e850
       oxlint:
         specifier: ^1.35.0
         version: 1.35.0(oxlint-tsgolint@0.10.0)
       oxlint-tsgolint:
         specifier: ^0.10.0
         version: 0.10.0
-      tokentally:
-        specifier: github:steipete/tokentally#v0.1.0
-        version: https://codeload.github.com/steipete/tokentally/tar.gz/99865e5c16f5340c9589a2c5d85c3ea47dbcec82
       tsx:
         specifier: ^4.21.0
         version: 4.21.0
@@ -2840,6 +2840,7 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
+    deprecated: Use @exodus/bytes instead for a more spec-conformant and faster implementation
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
