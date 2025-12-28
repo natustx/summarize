@@ -655,6 +655,7 @@ button.ghost:hover {
 
 .drawerRow label.length.mini .pickerTrigger {
   padding: 6px 10px;
+  min-width: 68px;
 }
 
 .drawerRow label.length.mini input[type="text"] {
