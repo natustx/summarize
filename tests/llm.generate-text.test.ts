@@ -1,6 +1,7 @@
 import type { Api } from '@mariozechner/pi-ai'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateTextWithModelId, streamTextWithModelId } from '../src/llm/generate-text.js'
+import { buildAnthropicDocumentPrompt } from '../src/llm/prompt.js'
 import { makeAssistantMessage, makeTextDeltaStream } from './helpers/pi-ai-mock.js'
 
 type MockModel = { provider: string; id: string; api: Api }
@@ -146,6 +147,52 @@ describe('llm generate/stream', () => {
 
     expect(generateArgs).not.toHaveProperty('maxTokens')
     expect(streamArgs).not.toHaveProperty('maxTokens')
+  })
+
+  it('uses Anthropic document calls for PDF prompts', async () => {
+    mocks.completeSimple.mockClear()
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'ok' }],
+          usage: { input_tokens: 3, output_tokens: 4 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    })
+
+    const result = await generateTextWithModelId({
+      modelId: 'anthropic/claude-opus-4-5',
+      apiKeys: {
+        xaiApiKey: null,
+        openaiApiKey: null,
+        googleApiKey: null,
+        anthropicApiKey: 'k',
+        openrouterApiKey: null,
+      },
+      prompt: buildAnthropicDocumentPrompt({
+        text: 'Summarize the attached PDF.',
+        document: {
+          bytes: new Uint8Array([1, 2, 3]),
+          mediaType: 'application/pdf',
+          filename: 'test.pdf',
+        },
+      }),
+      timeoutMs: 2000,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    })
+
+    expect(result.text).toBe('ok')
+    expect(result.usage).toMatchObject({ promptTokens: 3, completionTokens: 4, totalTokens: 7 })
+    expect(mocks.completeSimple).toHaveBeenCalledTimes(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(options.body))
+    expect(body.model).toBe('claude-opus-4-5')
+    expect(body.messages?.[0]?.content?.[0]?.type).toBe('document')
+    expect(body.messages?.[0]?.content?.[0]?.source?.media_type).toBe('application/pdf')
+    expect(typeof body.messages?.[0]?.content?.[0]?.source?.data).toBe('string')
   })
 
   it('routes by provider (streamText) and includes maxOutputTokens when set', async () => {

@@ -1,5 +1,5 @@
 import type { OutputLanguage } from '../../../language.js'
-import type { PromptPayload } from '../../../llm/prompt.js'
+import { buildAnthropicDocumentPrompt, type PromptPayload } from '../../../llm/prompt.js'
 import { convertToMarkdownWithMarkitdown } from '../../../markitdown.js'
 import type { FixedModelSpec } from '../../../model-spec.js'
 import { buildFileSummaryPrompt, buildFileTextSummaryPrompt } from '../../../prompts/index.js'
@@ -7,10 +7,12 @@ import type { SummaryLength } from '../../../shared/contracts.js'
 import { formatBytes } from '../../../tty/format.js'
 import {
   type AssetAttachment,
+  MAX_ANTHROPIC_DOCUMENT_BYTES,
   buildAssetPromptPayload,
   getFileBytesFromAttachment,
   getTextContentFromAttachment,
   shouldMarkitdownConvertMediaType,
+  supportsNativeFileAttachment,
 } from '../../attachments.js'
 import { MAX_TEXT_BYTES_DEFAULT } from '../../constants.js'
 import { hasUvxCli } from '../../env.js'
@@ -107,6 +109,49 @@ export async function prepareAssetPrompt({
 
   let preprocessedMarkdown: string | null = null
   let usingPreprocessedMarkdown = false
+
+  const canUseNativeFileAttachment =
+    attachment.kind === 'file' &&
+    !textContent &&
+    ctx.preprocessMode !== 'always' &&
+    ctx.fixedModelSpec?.transport === 'native' &&
+    supportsNativeFileAttachment({
+      provider: ctx.fixedModelSpec.provider,
+      attachment: { kind: attachment.kind, mediaType: attachment.mediaType },
+    })
+
+  if (canUseNativeFileAttachment) {
+    if (!fileBytes) {
+      throw new Error('Internal error: missing file bytes for document attachment')
+    }
+    if (fileBytes.byteLength > MAX_ANTHROPIC_DOCUMENT_BYTES) {
+      if (ctx.preprocessMode === 'off') {
+        throw new Error(
+          `PDF is too large to attach (${formatBytes(fileBytes.byteLength)}). Max is ${formatBytes(MAX_ANTHROPIC_DOCUMENT_BYTES)}. Enable preprocessing or use a smaller file.`
+        )
+      }
+    } else {
+      promptText = buildFileSummaryPrompt({
+        filename: attachment.filename,
+        mediaType: attachment.mediaType,
+        summaryLength: summaryLengthTarget,
+        contentLength: textContent?.content.length ?? null,
+        outputLanguage: ctx.outputLanguage,
+        promptOverride: ctx.promptOverride ?? null,
+        lengthInstruction: ctx.lengthInstruction ?? null,
+        languageInstruction: ctx.languageInstruction ?? null,
+      })
+      const promptPayload = buildAnthropicDocumentPrompt({
+        text: promptText,
+        document: {
+          bytes: fileBytes,
+          mediaType: attachment.mediaType,
+          filename: attachment.filename,
+        },
+      })
+      return { promptPayload, promptText, assetFooterParts, textContent }
+    }
+  }
 
   // Non-text file attachments require preprocessing (pi-ai message format supports images, but not generic files).
   if (attachment.kind === 'file' && !textContent) {

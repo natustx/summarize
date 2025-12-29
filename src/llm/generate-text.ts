@@ -8,7 +8,11 @@ import type {
 } from '@mariozechner/pi-ai'
 import { completeSimple, getModel, streamSimple } from '@mariozechner/pi-ai'
 import { parseGatewayStyleModelId } from './model-id.js'
-import type { PromptPayload } from './prompt.js'
+import {
+  isAnthropicDocumentPrompt,
+  type AnthropicDocumentPrompt,
+  type PromptPayload,
+} from './prompt.js'
 
 export type LlmApiKeys = {
   xaiApiKey: string | null
@@ -168,6 +172,9 @@ function resolveOpenAiClientConfig({
 }
 
 function promptToContext({ system, prompt }: { system?: string; prompt: PromptPayload }): Context {
+  if (isAnthropicDocumentPrompt(prompt)) {
+    throw new Error('Internal error: anthropic document prompt cannot be converted to context.')
+  }
   const messages: Message[] =
     typeof prompt === 'string'
       ? [{ role: 'user', content: prompt, timestamp: Date.now() }]
@@ -186,6 +193,120 @@ function extractText(message: AssistantMessage): string {
     .map((c) => c.text)
     .join('')
   return text.trim()
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64')
+}
+
+function createUnsupportedFunctionalityError(message: string): Error {
+  const error = new Error(`Functionality not supported: ${message}`)
+  error.name = 'UnsupportedFunctionalityError'
+  return error
+}
+
+function normalizeAnthropicUsage(raw: unknown): LlmTokenUsage | null {
+  if (!raw || typeof raw !== 'object') return null
+  const usage = raw as { input_tokens?: unknown; output_tokens?: unknown }
+  const promptTokens =
+    typeof usage.input_tokens === 'number' && Number.isFinite(usage.input_tokens)
+      ? usage.input_tokens
+      : null
+  const completionTokens =
+    typeof usage.output_tokens === 'number' && Number.isFinite(usage.output_tokens)
+      ? usage.output_tokens
+      : null
+  const totalTokens =
+    typeof promptTokens === 'number' && typeof completionTokens === 'number'
+      ? promptTokens + completionTokens
+      : null
+  if (promptTokens === null && completionTokens === null && totalTokens === null) return null
+  return { promptTokens, completionTokens, totalTokens }
+}
+
+async function completeAnthropicDocument({
+  modelId,
+  apiKey,
+  prompt,
+  system,
+  maxOutputTokens,
+  timeoutMs,
+  fetchImpl,
+  anthropicBaseUrlOverride,
+}: {
+  modelId: string
+  apiKey: string
+  prompt: AnthropicDocumentPrompt
+  system?: string
+  maxOutputTokens?: number
+  timeoutMs: number
+  fetchImpl: typeof fetch
+  anthropicBaseUrlOverride?: string | null
+}): Promise<{ text: string; usage: LlmTokenUsage | null }> {
+  const baseUrl = resolveBaseUrlOverride(anthropicBaseUrlOverride) ?? 'https://api.anthropic.com'
+  const url = new URL('/v1/messages', baseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const payload = {
+    model: modelId,
+    max_tokens: maxOutputTokens ?? 4096,
+    ...(system ? { system } : {}),
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: prompt.document.mediaType,
+              data: bytesToBase64(prompt.document.bytes),
+            },
+          },
+          { type: 'text', text: prompt.text },
+        ],
+      },
+    ],
+  }
+
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+
+    const bodyText = await response.text()
+    if (!response.ok) {
+      const error = new Error(`Anthropic API error (${response.status}).`)
+      ;(error as { statusCode?: number }).statusCode = response.status
+      ;(error as { responseBody?: string }).responseBody = bodyText
+      throw error
+    }
+
+    const data = JSON.parse(bodyText) as {
+      content?: Array<{ type?: string; text?: string }>
+      usage?: unknown
+    }
+    const text = Array.isArray(data.content)
+      ? data.content
+          .filter((block) => block.type === 'text' && typeof block.text === 'string')
+          .map((block) => block.text)
+          .join('')
+          .trim()
+      : ''
+    if (!text) {
+      throw new Error(`LLM returned an empty summary (model anthropic/${modelId}).`)
+    }
+    return { text, usage: normalizeAnthropicUsage(data.usage) }
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 function wantsImages(context: Context): boolean {
@@ -382,7 +503,7 @@ export async function generateTextWithModelId({
   temperature,
   maxOutputTokens,
   timeoutMs,
-  fetchImpl: _fetchImpl,
+  fetchImpl,
   forceOpenRouter,
   openaiBaseUrlOverride,
   anthropicBaseUrlOverride,
@@ -414,8 +535,38 @@ export async function generateTextWithModelId({
   provider: 'xai' | 'openai' | 'google' | 'anthropic' | 'zai'
   usage: LlmTokenUsage | null
 }> {
-  void _fetchImpl
   const parsed = parseGatewayStyleModelId(modelId)
+
+  if (isAnthropicDocumentPrompt(prompt)) {
+    if (parsed.provider !== 'anthropic') {
+      throw createUnsupportedFunctionalityError('document attachments require anthropic/... models')
+    }
+    const apiKey = apiKeys.anthropicApiKey
+    if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY for anthropic/... model')
+    try {
+      const result = await completeAnthropicDocument({
+        modelId: parsed.model,
+        apiKey,
+        prompt,
+        system,
+        maxOutputTokens,
+        timeoutMs,
+        fetchImpl,
+        anthropicBaseUrlOverride,
+      })
+      return {
+        text: result.text,
+        canonicalModelId: parsed.canonical,
+        provider: parsed.provider,
+        usage: result.usage,
+      }
+    } catch (error) {
+      const normalized = normalizeAnthropicModelAccessError(error, parsed.model)
+      if (normalized) throw normalized
+      throw error
+    }
+  }
+
   const context = promptToContext({ system, prompt })
 
   const isOpenaiGpt5 = parsed.provider === 'openai' && /^gpt-5([-.].+)?$/i.test(parsed.model)
@@ -638,7 +789,7 @@ export async function streamTextWithModelId({
   temperature,
   maxOutputTokens,
   timeoutMs,
-  fetchImpl: _fetchImpl,
+  fetchImpl,
   forceOpenRouter,
   openaiBaseUrlOverride,
   anthropicBaseUrlOverride,
@@ -667,8 +818,13 @@ export async function streamTextWithModelId({
   usage: Promise<LlmTokenUsage | null>
   lastError: () => unknown
 }> {
-  void _fetchImpl
   const parsed = parseGatewayStyleModelId(modelId)
+  if (isAnthropicDocumentPrompt(prompt)) {
+    void fetchImpl
+    throw createUnsupportedFunctionalityError(
+      'streaming document attachments is not supported yet; disable streaming.'
+    )
+  }
   const context = promptToContext({ system, prompt })
 
   const controller = new AbortController()

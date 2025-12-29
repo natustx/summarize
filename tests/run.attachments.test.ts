@@ -6,6 +6,7 @@ import {
   getTextContentFromAttachment,
   isTextLikeMediaType,
   isUnsupportedAttachmentError,
+  supportsNativeFileAttachment,
 } from '../src/run/attachments.js'
 
 describe('run/attachments', () => {
@@ -55,5 +56,20 @@ describe('run/attachments', () => {
     expect(() => assertAssetMediaTypeSupported({ attachment: zip, sizeLabel: '1B' })).toThrow(
       /Unsupported file type/i
     )
+  })
+
+  it('detects native file attachment support', () => {
+    expect(
+      supportsNativeFileAttachment({
+        provider: 'anthropic',
+        attachment: { kind: 'file', mediaType: 'application/pdf' },
+      })
+    ).toBe(true)
+    expect(
+      supportsNativeFileAttachment({
+        provider: 'google',
+        attachment: { kind: 'file', mediaType: 'application/pdf' },
+      })
+    ).toBe(false)
   })
 })

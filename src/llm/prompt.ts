@@ -1,6 +1,18 @@
 import type { ImageContent, Message, TextContent, UserMessage } from '@mariozechner/pi-ai'
 
-export type PromptPayload = string | Array<Message>
+export type DocumentAttachment = {
+  bytes: Uint8Array
+  mediaType: string
+  filename: string | null
+}
+
+export type AnthropicDocumentPrompt = {
+  kind: 'anthropic-document'
+  text: string
+  document: DocumentAttachment
+}
+
+export type PromptPayload = string | Array<Message> | AnthropicDocumentPrompt
 
 export function userTextMessage(text: string, timestamp = Date.now()): UserMessage {
   return { role: 'user', content: text, timestamp }
@@ -26,4 +38,25 @@ export function userTextAndImageMessage({
     { type: 'image', data: bytesToBase64(imageBytes), mimeType },
   ]
   return { role: 'user', content: parts, timestamp }
+}
+
+export function buildAnthropicDocumentPrompt({
+  text,
+  document,
+}: {
+  text: string
+  document: DocumentAttachment
+}): AnthropicDocumentPrompt {
+  return { kind: 'anthropic-document', text, document }
+}
+
+export function isAnthropicDocumentPrompt(
+  prompt: PromptPayload
+): prompt is AnthropicDocumentPrompt {
+  return (
+    typeof prompt === 'object' &&
+    prompt !== null &&
+    !Array.isArray(prompt) &&
+    (prompt as { kind?: unknown }).kind === 'anthropic-document'
+  )
 }

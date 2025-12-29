@@ -131,6 +131,66 @@ describe('cli preprocess / markitdown integration', () => {
     expect(stdout.getText()).toContain('OK')
   })
 
+  it('sends PDFs directly to Anthropic without markitdown when supported', async () => {
+    mocks.streamSimple.mockImplementation(() =>
+      makeTextDeltaStream(
+        ['OK\n'],
+        makeAssistantMessage({ text: 'OK\n', usage: { input: 1, output: 1, totalTokens: 2 } })
+      )
+    )
+    mocks.streamSimple.mockClear()
+
+    const root = mkdtempSync(join(tmpdir(), 'summarize-preprocess-anthropic-pdf-'))
+    const pdfPath = join(root, 'test.pdf')
+    writeFileSync(pdfPath, Buffer.from('%PDF-1.7\n%PDF minimal\n%%EOF\n', 'utf8'))
+
+    const execFileMock = vi.fn((file, args, _opts, cb) => {
+      void file
+      void args
+      cb(null, '# Converted\n\nShould not run\n', '')
+    })
+
+    const fetchMock = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          content: [{ type: 'text', text: 'OK' }],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    })
+
+    const stdout = collectStream()
+
+    await runCli(
+      [
+        '--model',
+        'anthropic/claude-opus-4-5',
+        '--timeout',
+        '2s',
+        '--stream',
+        'on',
+        '--plain',
+        pdfPath,
+      ],
+      {
+        env: { ANTHROPIC_API_KEY: 'test', UVX_PATH: 'uvx' },
+        fetch: fetchMock as unknown as typeof fetch,
+        execFile: execFileMock as unknown as ExecFileFn,
+        stdout: stdout.stream,
+        stderr: noopStream(),
+      }
+    )
+
+    expect(stdout.getText()).toContain('OK')
+    expect(execFileMock).toHaveBeenCalledTimes(0)
+    expect(mocks.streamSimple).toHaveBeenCalledTimes(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit
+    const body = JSON.parse(String(options.body))
+    expect(body.messages?.[0]?.content?.[0]?.type).toBe('document')
+  })
+
   it('errors when --preprocess off is used for PDFs (no binary attachments)', async () => {
     mocks.streamSimple.mockImplementation(() =>
       makeTextDeltaStream(

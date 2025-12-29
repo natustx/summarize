@@ -8,6 +8,8 @@ import { formatBytes } from '../tty/format.js'
 
 export type AssetAttachment = Awaited<ReturnType<typeof loadLocalAsset>>['attachment']
 
+export const MAX_ANTHROPIC_DOCUMENT_BYTES = 32 * 1024 * 1024
+
 export function isUnsupportedAttachmentError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const err = error as { name?: unknown; message?: unknown }
@@ -135,6 +137,18 @@ export function shouldMarkitdownConvertMediaType(mediaType: string): boolean {
   if (mt === 'application/vnd.ms-excel') return true
   if (mt === 'application/vnd.ms-powerpoint') return true
   return false
+}
+
+export function supportsNativeFileAttachment({
+  provider,
+  attachment,
+}: {
+  provider: 'xai' | 'openai' | 'google' | 'anthropic' | 'zai'
+  attachment: { kind: 'image' | 'file'; mediaType: string }
+}): boolean {
+  if (attachment.kind !== 'file') return false
+  if (provider !== 'anthropic') return false
+  return attachment.mediaType.toLowerCase() === 'application/pdf'
 }
 
 export function assertProviderSupportsAttachment({
