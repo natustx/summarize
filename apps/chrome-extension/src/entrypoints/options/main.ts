@@ -330,40 +330,80 @@ const pickers = mountOptionsPickers(pickersRoot, {
   ...pickerHandlers,
 })
 
+const updateAutoToggle = () => {
+  autoToggle.update({
+    id: 'options-auto',
+    label: 'Auto-summarize when panel is open',
+    checked: autoValue,
+    onCheckedChange: handleAutoToggleChange,
+  })
+}
+const handleAutoToggleChange = (checked: boolean) => {
+  autoValue = checked
+  updateAutoToggle()
+}
 const autoToggle = mountCheckbox(autoToggleRoot, {
   id: 'options-auto',
   label: 'Auto-summarize when panel is open',
   checked: autoValue,
-  onCheckedChange: (checked) => {
-    autoValue = checked
-  },
+  onCheckedChange: handleAutoToggleChange,
 })
 
+const updateChatToggle = () => {
+  chatToggle.update({
+    id: 'options-chat',
+    label: 'Enable Chat mode in the side panel',
+    checked: chatEnabledValue,
+    onCheckedChange: handleChatToggleChange,
+  })
+}
+const handleChatToggleChange = (checked: boolean) => {
+  chatEnabledValue = checked
+  updateChatToggle()
+}
 const chatToggle = mountCheckbox(chatToggleRoot, {
   id: 'options-chat',
   label: 'Enable Chat mode in the side panel',
   checked: chatEnabledValue,
-  onCheckedChange: (checked) => {
-    chatEnabledValue = checked
-  },
+  onCheckedChange: handleChatToggleChange,
 })
 
+const updateHoverSummariesToggle = () => {
+  hoverSummariesToggle.update({
+    id: 'options-hover-summaries',
+    label: 'Show hover summary tooltips in pages',
+    checked: hoverSummariesValue,
+    onCheckedChange: handleHoverSummariesToggleChange,
+  })
+}
+const handleHoverSummariesToggleChange = (checked: boolean) => {
+  hoverSummariesValue = checked
+  updateHoverSummariesToggle()
+}
 const hoverSummariesToggle = mountCheckbox(hoverSummariesToggleRoot, {
   id: 'options-hover-summaries',
   label: 'Show hover summary tooltips in pages',
   checked: hoverSummariesValue,
-  onCheckedChange: (checked) => {
-    hoverSummariesValue = checked
-  },
+  onCheckedChange: handleHoverSummariesToggleChange,
 })
 
+const updateExtendedLoggingToggle = () => {
+  extendedLoggingToggle.update({
+    id: 'options-extended-logging',
+    label: 'Extended logging (send full input/output to daemon logs)',
+    checked: extendedLoggingValue,
+    onCheckedChange: handleExtendedLoggingToggleChange,
+  })
+}
+const handleExtendedLoggingToggleChange = (checked: boolean) => {
+  extendedLoggingValue = checked
+  updateExtendedLoggingToggle()
+}
 const extendedLoggingToggle = mountCheckbox(extendedLoggingToggleRoot, {
   id: 'options-extended-logging',
   label: 'Extended logging (send full input/output to daemon logs)',
   checked: extendedLoggingValue,
-  onCheckedChange: (checked) => {
-    extendedLoggingValue = checked
-  },
+  onCheckedChange: handleExtendedLoggingToggleChange,
 })
 
 const updateAdvancedVisibility = () => {
@@ -389,38 +429,10 @@ async function load() {
   chatEnabledValue = s.chatEnabled
   hoverSummariesValue = s.hoverSummaries
   extendedLoggingValue = s.extendedLogging
-  autoToggle.update({
-    id: 'options-auto',
-    label: 'Auto-summarize when panel is open',
-    checked: autoValue,
-    onCheckedChange: (checked) => {
-      autoValue = checked
-    },
-  })
-  chatToggle.update({
-    id: 'options-chat',
-    label: 'Enable Chat mode in the side panel',
-    checked: chatEnabledValue,
-    onCheckedChange: (checked) => {
-      chatEnabledValue = checked
-    },
-  })
-  hoverSummariesToggle.update({
-    id: 'options-hover-summaries',
-    label: 'Show hover summary tooltips in pages',
-    checked: hoverSummariesValue,
-    onCheckedChange: (checked) => {
-      hoverSummariesValue = checked
-    },
-  })
-  extendedLoggingToggle.update({
-    id: 'options-extended-logging',
-    label: 'Extended logging (send full input/output to daemon logs)',
-    checked: extendedLoggingValue,
-    onCheckedChange: (checked) => {
-      extendedLoggingValue = checked
-    },
-  })
+  updateAutoToggle()
+  updateChatToggle()
+  updateHoverSummariesToggle()
+  updateExtendedLoggingToggle()
   maxCharsEl.value = String(s.maxChars)
   requestModeEl.value = s.requestMode
   firecrawlModeEl.value = s.firecrawlMode

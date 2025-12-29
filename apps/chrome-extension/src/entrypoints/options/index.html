@@ -14,12 +14,30 @@
       </div>
       <form id="form">
         <section class="section">
+          <div id="daemonStatus" class="daemonStatus" data-state="warn">
+            <span class="daemonStatus__dot" aria-hidden="true"></span>
+            <span class="daemonStatus__text">Checking daemon…</span>
+          </div>
+          <div class="combo">
+            <div id="autoToggle" class="row"></div>
+            <span class="subtitle">Auto-summarize when the panel is open.</span>
+          </div>
+          <div class="combo">
+            <div id="chatToggle"></div>
+            <span class="subtitle">Enable Chat mode in the side panel (default on).</span>
+          </div>
+          <div class="combo">
+            <div id="hoverSummariesToggle"></div>
+            <span class="subtitle">Show hover summary tooltips in pages (default off).</span>
+          </div>
+        </section>
+
+        <section class="section">
           <h2>Token setup</h2>
           <label>
             <span>Token</span>
             <input id="token" type="text" placeholder="(generated in side panel)" />
           </label>
-          <div id="autoToggle" class="row"></div>
         </section>
 
         <section class="section">
@@ -125,20 +143,6 @@
           <div class="hint">Values set here override daemon config. Leave blank to use config.</div>
           <div id="advancedFields" class="advancedFields" hidden>
             <div class="advancedGrid">
-              <div class="combo span-2">
-                <div id="daemonStatus" class="daemonStatus" data-state="warn">
-                  <span class="daemonStatus__dot" aria-hidden="true"></span>
-                  <span class="daemonStatus__text">Checking daemon…</span>
-                </div>
-              </div>
-              <div class="combo span-2">
-                <div id="chatToggle"></div>
-                <span class="subtitle">Enable Chat mode in the side panel (default on).</span>
-              </div>
-              <div class="combo span-2">
-                <div id="hoverSummariesToggle"></div>
-                <span class="subtitle">Show hover summary tooltips in pages (default off).</span>
-              </div>
               <div class="combo span-2">
                 <div id="extendedLoggingToggle"></div>
                 <span class="subtitle">
