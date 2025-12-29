@@ -34,6 +34,7 @@ export type PanelState = {
   ui: UiState | null
   currentSource: { url: string; title: string | null } | null
   lastMeta: { inputSummary: string | null; model: string | null; modelLabel: string | null }
+  summaryMarkdown: string | null
   summaryFromCache: boolean | null
   phase: PanelPhase
   error: string | null

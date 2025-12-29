@@ -9,7 +9,11 @@ import { parseSseStream } from '../lib/sse'
 type PanelToBg =
   | { type: 'panel:ready' }
   | { type: 'panel:summarize'; refresh?: boolean }
-  | { type: 'panel:chat'; messages: Array<{ role: 'user' | 'assistant'; content: string }> }
+  | {
+      type: 'panel:chat'
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>
+      summary?: string | null
+    }
   | { type: 'panel:ping' }
   | { type: 'panel:closed' }
   | { type: 'panel:rememberUrl'; url: string }
@@ -70,6 +74,7 @@ const optionsWindowSize = { width: 940, height: 680 }
 const optionsWindowMin = { width: 820, height: 560 }
 const optionsWindowMargin = 20
 const MIN_CHAT_CHARS = 100
+const CHAT_FULL_TRANSCRIPT_MAX_CHARS = Number.MAX_SAFE_INTEGER
 
 function resolveOptionsUrl(): string {
   const page = chrome.runtime.getManifest().options_ui?.page ?? 'options.html'
@@ -260,7 +265,7 @@ export default defineBackground(() => {
     if (cached) return cached
 
     if (!shouldPreferUrlMode(tab.url)) {
-      const extractedAttempt = await extractFromTab(tab.id, settings.maxChars)
+      const extractedAttempt = await extractFromTab(tab.id, CHAT_FULL_TRANSCRIPT_MAX_CHARS)
       if (extractedAttempt.ok) {
         const extracted = extractedAttempt.data
         const text = extracted.text.trim()
@@ -292,7 +297,7 @@ export default defineBackground(() => {
         url: tab.url,
         mode: 'url',
         extractOnly: true,
-        maxCharacters: settings.maxChars,
+        maxCharacters: null,
       }),
     })
     const json = (await res.json()) as {
@@ -635,9 +640,16 @@ export default defineBackground(() => {
                 return
               }
 
-              const chatMessages = (
-                msg as { messages: Array<{ role: 'user' | 'assistant'; content: string }> }
-              ).messages
+              const chatPayload = msg as {
+                messages: Array<{ role: 'user' | 'assistant'; content: string }>
+                summary?: string | null
+              }
+              const chatMessages = chatPayload.messages
+              const summaryText =
+                typeof chatPayload.summary === 'string' ? chatPayload.summary.trim() : ''
+              const pageContent = summaryText
+                ? `Summary (auto-generated):\n${summaryText}\n\nFull transcript:\n${cachedExtract.text}`
+                : `Full transcript:\n${cachedExtract.text}`
 
               sendStatus('Sending to AI…')
 
@@ -651,7 +663,7 @@ export default defineBackground(() => {
                   body: JSON.stringify({
                     url: cachedExtract.url,
                     title: cachedExtract.title,
-                    pageContent: cachedExtract.text,
+                    pageContent,
                     messages: chatMessages,
                     model: settings.model,
                   }),

@@ -1093,6 +1093,18 @@ main {
   }
 }
 
+@keyframes chatPulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2px);
+  }
+}
+
 .setup {
   border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   background: var(--surface);
@@ -1335,12 +1347,25 @@ button.setup__pill.isActive {
 
 .chatMessage.assistant {
   align-self: flex-start;
-  background: color-mix(in srgb, var(--panel) 45%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  background: color-mix(in srgb, var(--panel) 38%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
 }
 
 .chatMessage.assistant.streaming {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--border) 40%, transparent);
+  background: color-mix(in srgb, var(--panel) 30%, transparent);
+  color: color-mix(in srgb, var(--text) 75%, var(--muted));
+  position: relative;
+}
+
+.chatMessage.assistant.streaming[data-placeholder="true"]::after {
+  content: "…";
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  font-size: 16px;
+  color: var(--muted);
+  animation: chatPulse 1.2s ease-in-out infinite;
 }
 
 .chatMessage p {

@@ -254,6 +254,8 @@ Instructions:
 - Answer questions based on the page content above
 - If asked about something not in the content, say so clearly
 - Be concise and direct
+- The page_content may include a "Summary (auto-generated)" and a "Full transcript"
+- Treat the summary as a quick reference; prefer the full transcript if they conflict
 - Use Markdown formatting when helpful
 - Do not make up information not present in the page content`
 }

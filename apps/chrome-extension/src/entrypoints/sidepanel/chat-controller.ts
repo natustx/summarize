@@ -17,6 +17,7 @@ export type ChatControllerOptions = {
   contextEl: HTMLDivElement
   markdown: MarkdownIt
   limits: ChatHistoryLimits
+  scrollToBottom?: () => void
 }
 
 export class ChatController {
@@ -27,6 +28,7 @@ export class ChatController {
   private readonly contextEl: HTMLDivElement
   private readonly markdown: MarkdownIt
   private readonly limits: ChatHistoryLimits
+  private readonly scrollToBottom?: () => void
 
   constructor(opts: ChatControllerOptions) {
     this.messagesEl = opts.messagesEl
@@ -35,6 +37,7 @@ export class ChatController {
     this.contextEl = opts.contextEl
     this.markdown = opts.markdown
     this.limits = opts.limits
+    this.scrollToBottom = opts.scrollToBottom
   }
 
   getMessages(): ChatMessage[] {
@@ -64,9 +67,7 @@ export class ChatController {
     for (const message of messages) {
       this.renderMessage(message, { scroll: false })
     }
-    if (opts?.scroll !== false) {
-      this.messagesEl.scrollTop = this.messagesEl.scrollHeight
-    }
+    if (opts?.scroll !== false) this.scrollToBottom?.()
     this.updateVisibility()
     this.updateContextStatus()
   }
@@ -86,11 +87,16 @@ export class ChatController {
       if (msgEl) {
         msgEl.innerHTML = this.markdown.render(content || '...')
         msgEl.classList.add('streaming')
+        if (content.trim()) {
+          msgEl.removeAttribute('data-placeholder')
+        } else {
+          msgEl.setAttribute('data-placeholder', 'true')
+        }
         for (const a of Array.from(msgEl.querySelectorAll('a'))) {
           a.setAttribute('target', '_blank')
           a.setAttribute('rel', 'noopener noreferrer')
         }
-        this.messagesEl.scrollTop = this.messagesEl.scrollHeight
+        this.scrollToBottom?.()
       }
     }
     this.updateContextStatus()
@@ -102,6 +108,7 @@ export class ChatController {
       const msgEl = this.messagesEl.querySelector(`[data-id="${lastMsg.id}"]`)
       if (msgEl) {
         msgEl.classList.remove('streaming')
+        msgEl.removeAttribute('data-placeholder')
       }
     }
     this.updateContextStatus()
@@ -114,6 +121,10 @@ export class ChatController {
 
     if (message.role === 'assistant') {
       msgEl.innerHTML = this.markdown.render(message.content || '...')
+      if (!message.content.trim()) {
+        msgEl.classList.add('streaming')
+        msgEl.setAttribute('data-placeholder', 'true')
+      }
       for (const a of Array.from(msgEl.querySelectorAll('a'))) {
         a.setAttribute('target', '_blank')
         a.setAttribute('rel', 'noopener noreferrer')
@@ -128,9 +139,7 @@ export class ChatController {
       this.messagesEl.appendChild(msgEl)
     }
 
-    if (opts?.scroll !== false) {
-      this.messagesEl.scrollTop = this.messagesEl.scrollHeight
-    }
+    if (opts?.scroll !== false) this.scrollToBottom?.()
   }
 
   private updateVisibility() {

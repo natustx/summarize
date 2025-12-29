@@ -16,7 +16,11 @@ import type { ChatMessage, PanelPhase, PanelState, RunStart, UiState } from './t
 type PanelToBg =
   | { type: 'panel:ready' }
   | { type: 'panel:summarize'; refresh?: boolean }
-  | { type: 'panel:chat'; messages: Array<{ role: 'user' | 'assistant'; content: string }> }
+  | {
+      type: 'panel:chat'
+      messages: Array<{ role: 'user' | 'assistant'; content: string }>
+      summary?: string | null
+    }
   | { type: 'panel:ping' }
   | { type: 'panel:closed' }
   | { type: 'panel:rememberUrl'; url: string }
@@ -50,6 +54,8 @@ const progressFillEl = byId<HTMLDivElement>('progressFill')
 const drawerEl = byId<HTMLElement>('drawer')
 const setupEl = byId<HTMLDivElement>('setup')
 const renderEl = byId<HTMLElement>('render')
+const mainEl = document.querySelector('main') as HTMLElement
+if (!mainEl) throw new Error('Missing <main>')
 const metricsEl = byId<HTMLDivElement>('metrics')
 const metricsHomeEl = byId<HTMLDivElement>('metricsHome')
 const chatMetricsSlotEl = byId<HTMLDivElement>('chatMetricsSlot')
@@ -81,6 +87,7 @@ const panelState: PanelState = {
   ui: null,
   currentSource: null,
   lastMeta: { inputSummary: null, model: null, modelLabel: null },
+  summaryMarkdown: null,
   summaryFromCache: null,
   phase: 'idle',
   error: null,
@@ -109,6 +116,7 @@ const chatController = new ChatController({
   contextEl: chatContextStatusEl,
   markdown: md,
   limits: chatLimits,
+  scrollToBottom: () => scrollToBottom(),
 })
 
 const isStreaming = () => panelState.phase === 'connecting' || panelState.phase === 'streaming'
@@ -134,6 +142,26 @@ const headerController = createHeaderController({
 
 headerController.updateHeaderOffset()
 window.addEventListener('resize', headerController.updateHeaderOffset)
+
+let autoScrollLocked = true
+
+const isNearBottom = () => {
+  const distance = mainEl.scrollHeight - mainEl.scrollTop - mainEl.clientHeight
+  return distance < 32
+}
+
+const updateAutoScrollLock = () => {
+  autoScrollLocked = isNearBottom()
+}
+
+const scrollToBottom = (force = false) => {
+  if (force) autoScrollLocked = true
+  if (!force && !autoScrollLocked) return
+  mainEl.scrollTop = mainEl.scrollHeight
+}
+
+mainEl.addEventListener('scroll', updateAutoScrollLock, { passive: true })
+updateAutoScrollLock()
 
 const updateChatDockHeight = () => {
   const height = chatDockEl.getBoundingClientRect().height
@@ -201,6 +229,7 @@ async function syncWithActiveTab() {
 function resetSummaryView() {
   renderEl.innerHTML = ''
   clearMetricsForMode('summary')
+  panelState.summaryMarkdown = null
   panelState.summaryFromCache = null
   resetChatState()
 }
@@ -220,6 +249,7 @@ window.addEventListener('unhandledrejection', (event) => {
 })
 
 function renderMarkdown(markdown: string) {
+  panelState.summaryMarkdown = markdown
   try {
     renderEl.innerHTML = md.render(markdown)
   } catch (err) {
@@ -661,6 +691,7 @@ const streamController = createStreamController({
   onReset: () => {
     renderEl.innerHTML = ''
     clearMetricsForMode('summary')
+    panelState.summaryMarkdown = null
     panelState.summaryFromCache = null
     panelState.lastMeta = { inputSummary: null, model: null, modelLabel: null }
     resetChatState()
@@ -1250,10 +1281,12 @@ function sendChatMessage() {
 
   panelState.chatStreaming = true
   chatSendBtn.disabled = true
+  scrollToBottom(true)
 
   send({
     type: 'panel:chat',
     messages: chatController.buildRequestMessages(),
+    summary: panelState.summaryMarkdown,
   })
 }
 
