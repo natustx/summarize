@@ -130,6 +130,10 @@ function resolveDaemonService(): DaemonService {
   throw new Error(`Daemon service install not supported on ${process.platform}`)
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function waitForHealth({
   fetchImpl,
   port,
@@ -154,6 +158,35 @@ async function waitForHealth({
   throw new Error(`Daemon not reachable at ${url}`)
 }
 
+async function waitForHealthWithRetries({
+  fetchImpl,
+  port,
+  attempts,
+  timeoutMs,
+  delayMs,
+}: {
+  fetchImpl: typeof fetch
+  port: number
+  attempts: number
+  timeoutMs: number
+  delayMs: number
+}): Promise<void> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await waitForHealth({ fetchImpl, port, timeoutMs })
+      return
+    } catch (err) {
+      lastError = err
+      if (attempt < attempts - 1) {
+        const backoff = Math.round(delayMs * Math.pow(1.6, attempt))
+        await sleep(backoff)
+      }
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(`Daemon not reachable at ${DAEMON_HOST}:${port}`)
+}
+
 async function checkAuth({
   fetchImpl,
   token,
@@ -171,6 +204,30 @@ async function checkAuth({
   } catch {
     return false
   }
+}
+
+async function checkAuthWithRetries({
+  fetchImpl,
+  token,
+  port,
+  attempts,
+  delayMs,
+}: {
+  fetchImpl: typeof fetch
+  token: string
+  port: number
+  attempts: number
+  delayMs: number
+}): Promise<boolean> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const ok = await checkAuth({ fetchImpl, token, port })
+    if (ok) return true
+    if (attempt < attempts - 1) {
+      const backoff = Math.round(delayMs * Math.pow(1.4, attempt))
+      await sleep(backoff)
+    }
+  }
+  return false
 }
 
 async function resolveCliEntrypointPathForService(): Promise<string> {
@@ -287,8 +344,14 @@ export async function handleDaemonRequest({
     const { programArguments, workingDirectory } = await resolveDaemonProgramArguments({ dev })
 
     await service.install({ env: envForRun, stdout, programArguments, workingDirectory })
-    await waitForHealth({ fetchImpl, port, timeoutMs: 5000 })
-    const authed = await checkAuth({ fetchImpl, token: token.trim(), port })
+    await waitForHealthWithRetries({ fetchImpl, port, attempts: 4, timeoutMs: 2500, delayMs: 250 })
+    const authed = await checkAuthWithRetries({
+      fetchImpl,
+      token: token.trim(),
+      port,
+      attempts: 4,
+      delayMs: 200,
+    })
     if (!authed) throw new Error('Daemon is up but auth failed (token mismatch?)')
 
     stdout.write(`Daemon config: ${configPath}\n`)
@@ -340,8 +403,20 @@ export async function handleDaemonRequest({
     }
 
     await service.restart({ stdout })
-    await waitForHealth({ fetchImpl, port: cfg.port, timeoutMs: 5000 })
-    const authed = await checkAuth({ fetchImpl, token: cfg.token, port: cfg.port })
+    await waitForHealthWithRetries({
+      fetchImpl,
+      port: cfg.port,
+      attempts: 4,
+      timeoutMs: 2500,
+      delayMs: 250,
+    })
+    const authed = await checkAuthWithRetries({
+      fetchImpl,
+      token: cfg.token,
+      port: cfg.port,
+      attempts: 4,
+      delayMs: 200,
+    })
     if (!authed) throw new Error('Daemon restarted but auth failed (token mismatch?)')
 
     stdout.write('OK: daemon restarted and authenticated.\n')
