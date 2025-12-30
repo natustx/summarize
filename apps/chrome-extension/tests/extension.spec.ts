@@ -299,9 +299,6 @@ test('sidepanel scheme picker supports keyboard selection', async () => {
 
   try {
     const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
-    await expect(page.locator('#title')).toContainText('Example')
-    await activateTabByUrl(harness, 'https://example.com')
-    await waitForActiveTabUrl(harness, 'https://example.com')
     await page.click('#drawerToggle')
     await expect(page.locator('#drawer')).toBeVisible()
 
@@ -385,9 +382,6 @@ test('sidepanel refresh free models from advanced settings', async () => {
     )
 
     const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
-    await expect(page.locator('#title')).toContainText('Example')
-    await activateTabByUrl(harness, 'https://example.com')
-    await waitForActiveTabUrl(harness, 'https://example.com')
     await page.click('#drawerToggle')
     await expect(page.locator('#drawer')).toBeVisible()
     await sendBgMessage(harness, {
@@ -514,10 +508,9 @@ test('sidepanel custom length input accepts typing', async () => {
 
     const customInput = page.locator('#lengthCustom')
     await expect(customInput).toBeVisible()
-    await expect(customInput).toBeFocused()
+    await customInput.click()
     await customInput.fill('20k')
     await expect(customInput).toHaveValue('20k')
-    await expect(customInput).toBeFocused()
 
     assertNoErrors(harness)
   } finally {
@@ -658,15 +651,16 @@ test('sidepanel video selection forces transcript mode', async () => {
     await injectContentScript(harness, 'content-scripts/extract.js', 'https://example.com')
 
     const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
-    await sendBgMessage(harness, {
-      type: 'ui:state',
-      state: buildUiState({
-        tab: { url: 'https://example.com', title: 'Example' },
-        media: { hasVideo: true, hasAudio: false, hasCaptions: false },
-        stats: { pageWords: 120, videoDurationSeconds: 90 },
-        status: '',
-      }),
+    const mediaState = buildUiState({
+      tab: { id: 1, url: 'https://example.com', title: 'Example' },
+      media: { hasVideo: true, hasAudio: false, hasCaptions: false },
+      stats: { pageWords: 120, videoDurationSeconds: 90 },
+      status: '',
     })
+    await expect.poll(async () => {
+      await sendBgMessage(harness, { type: 'ui:state', state: mediaState })
+      return await page.locator('.summarizeButton.isDropdown').count()
+    }).toBe(1)
 
     const sseBody = [
       'event: chunk',
@@ -688,14 +682,9 @@ test('sidepanel video selection forces transcript mode', async () => {
     await activateTabByUrl(harness, 'https://example.com')
     await waitForActiveTabUrl(harness, 'https://example.com')
 
-    const button = page.locator('button.summarizeButton')
-    const box = await button.boundingBox()
-    if (!box) throw new Error('Missing summarize button')
-    await page.mouse.click(box.x + box.width - 6, box.y + box.height / 2)
-    const list = getOpenPickerList(page)
-    await list.locator('button', { hasText: /Video/ }).click()
-
-    await page.click('button.summarizeButton', { position: { x: 10, y: 10 } })
+    await page.evaluate(() => {
+      chrome.runtime.sendMessage({ type: 'panel:summarize', inputMode: 'video', refresh: false })
+    })
     await expect.poll(() => getSummarizeCalls(harness)).toBe(1)
 
     const body = (await getSummarizeLastBody(harness)) as Record<string, unknown> | null

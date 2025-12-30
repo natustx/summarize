@@ -548,7 +548,7 @@ function SummarizeControl(props: SummarizeControlProps) {
         onPointerDown={onPointerDown}
         onKeyDown={onKeyDown}
       >
-        {selectedLabel}
+        Summarize
       </button>
       {portalRoot ? createPortal(content, portalRoot) : content}
       <select className="pickerHidden" {...api.getHiddenSelectProps()} />
