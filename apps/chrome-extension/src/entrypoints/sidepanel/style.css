@@ -733,7 +733,7 @@ button.ghost:hover {
 }
 
 .drawerAdvanced summary::after {
-  content: '';
+  content: "";
   display: inline-block;
   width: 6px;
   height: 6px;
@@ -771,15 +771,15 @@ button.ghost:hover {
   color: var(--muted);
 }
 
-.modelStatus[data-state='running'] {
+.modelStatus[data-state="running"] {
   color: color-mix(in srgb, var(--accent) 65%, var(--muted));
 }
 
-.modelStatus[data-state='error'] {
+.modelStatus[data-state="error"] {
   color: color-mix(in srgb, #ff6b6b 70%, var(--muted));
 }
 
-.modelStatus[data-state='ok'] {
+.modelStatus[data-state="ok"] {
   color: color-mix(in srgb, var(--accent) 80%, var(--muted));
 }
 

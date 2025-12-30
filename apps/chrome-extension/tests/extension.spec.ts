@@ -579,8 +579,7 @@ test('sidepanel chat queue sends next message after stream completes', async () 
     const contentPage = await harness.context.newPage()
     await contentPage.goto('https://example.com', { waitUntil: 'domcontentloaded' })
     await contentPage.evaluate(() => {
-      document.body.innerHTML =
-        '<article><p>' + 'Hello '.repeat(40) + '</p><p>More text for chat.</p></article>'
+      document.body.innerHTML = `<article><p>${'Hello '.repeat(40)}</p><p>More text for chat.</p></article>`
     })
     await contentPage.bringToFront()
     await activateTabByUrl(harness, 'https://example.com')
@@ -607,7 +606,10 @@ test('sidepanel chat queue sends next message after stream completes', async () 
     await harness.context.route(
       /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
       async (route) => {
-        const match = route.request().url().match(/\/v1\/summarize\/([^/]+)\/events/)
+        const match = route
+          .request()
+          .url()
+          .match(/\/v1\/summarize\/([^/]+)\/events/)
         const id = match?.[1] ?? 'chat-unknown'
         if (id === 'chat-1') await firstGate
         const body = [
@@ -667,8 +669,7 @@ test('sidepanel chat queue removes items before sending', async () => {
     const contentPage = await harness.context.newPage()
     await contentPage.goto('https://example.com', { waitUntil: 'domcontentloaded' })
     await contentPage.evaluate(() => {
-      document.body.innerHTML =
-        '<article><p>' + 'Hello '.repeat(40) + '</p><p>More text for chat.</p></article>'
+      document.body.innerHTML = `<article><p>${'Hello '.repeat(40)}</p><p>More text for chat.</p></article>`
     })
     await contentPage.bringToFront()
     await activateTabByUrl(harness, 'https://example.com')
@@ -695,7 +696,10 @@ test('sidepanel chat queue removes items before sending', async () => {
     await harness.context.route(
       /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
       async (route) => {
-        const match = route.request().url().match(/\/v1\/summarize\/([^/]+)\/events/)
+        const match = route
+          .request()
+          .url()
+          .match(/\/v1\/summarize\/([^/]+)\/events/)
         const id = match?.[1] ?? 'chat-unknown'
         if (id === 'chat-1') await firstGate
         const body = [
