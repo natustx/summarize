@@ -375,8 +375,8 @@ export async function handleDaemonRequest({
         await waitForHealthWithRetries({
           fetchImpl,
           port: cfg.port,
-          attempts: 4,
-          timeoutMs: 1500,
+          attempts: 5,
+          timeoutMs: 2000,
           delayMs: 400,
         })
         return true
@@ -414,8 +414,8 @@ export async function handleDaemonRequest({
     await waitForHealthWithRetries({
       fetchImpl,
       port: cfg.port,
-      attempts: 5,
-      timeoutMs: 5000,
+      attempts: 3,
+      timeoutMs: 6000,
       delayMs: 500,
     })
     const authed = await checkAuthWithRetries({

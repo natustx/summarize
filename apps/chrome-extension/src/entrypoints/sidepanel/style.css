@@ -1203,6 +1203,9 @@ button.setup__pill.isActive {
   width: 100%;
   min-width: 0;
   padding-right: 48px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .setup__copy {
