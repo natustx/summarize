@@ -285,6 +285,86 @@ test('sidepanel scheme picker supports keyboard selection', async () => {
   }
 })
 
+test('sidepanel refresh free models from advanced settings', async () => {
+  const harness = await launchExtension()
+
+  try {
+    await mockDaemonSummarize(harness)
+    await seedSettings(harness, { token: 'test-token', autoSummarize: false })
+
+    let modelCalls = 0
+    await harness.context.route('http://127.0.0.1:8787/v1/models', async (route) => {
+      modelCalls += 1
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ok: true,
+          options: [
+            { id: 'auto', label: 'Auto' },
+            { id: 'free', label: 'Free (OpenRouter)' },
+          ],
+          providers: {
+            openrouter: true,
+            openai: false,
+            google: false,
+            anthropic: false,
+            xai: false,
+            zai: false,
+          },
+          openaiBaseUrl: null,
+          localModelsSource: null,
+        }),
+      })
+    })
+
+    await harness.context.route('http://127.0.0.1:8787/v1/refresh-free', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ok: true, id: 'refresh-1' }),
+      })
+    })
+
+    const sseBody = [
+      'event: status',
+      'data: {"text":"Refresh free: scanning..."}',
+      '',
+      'event: done',
+      'data: {}',
+      '',
+    ].join('\n')
+
+    await harness.context.route(
+      'http://127.0.0.1:8787/v1/refresh-free/refresh-1/events',
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+          body: sseBody,
+        })
+      }
+    )
+
+    const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
+    await sendBgMessage(harness, {
+      type: 'ui:state',
+      state: buildUiState({
+        status: '',
+        settings: { tokenPresent: true, autoSummarize: false, model: 'auto', length: 'xl' },
+      }),
+    })
+
+    await page.locator('#advancedSettings summary').click()
+    await page.locator('#modelRefresh').click()
+    await expect(page.locator('#modelStatus')).toContainText('Free models updated.')
+    await expect.poll(() => modelCalls).toBeGreaterThanOrEqual(2)
+    assertNoErrors(harness)
+  } finally {
+    await closeExtension(harness.context, harness.userDataDir)
+  }
+})
+
 test('sidepanel mode picker updates theme mode', async () => {
   const harness = await launchExtension()
 

@@ -1,11 +1,14 @@
 import MarkdownIt from 'markdown-it'
 
+import { readPresetOrCustomValue } from '../../lib/combo'
 import { buildIdleSubtitle } from '../../lib/header'
 import { buildMetricsParts, buildMetricsTokens } from '../../lib/metrics'
 import { defaultSettings, loadSettings, patchSettings } from '../../lib/settings'
 import { applyTheme } from '../../lib/theme'
 import { generateToken } from '../../lib/token'
 import { mountCheckbox } from '../../ui/zag-checkbox'
+import { parseSseEvent } from '../../../../src/shared/sse-events.js'
+import { parseSseStream } from '../../lib/sse'
 import { ChatController } from './chat-controller'
 import { type ChatHistoryLimits, compactChatHistory } from './chat-state'
 import { createHeaderController } from './header-controller'
@@ -72,6 +75,11 @@ const autoToggleRoot = byId<HTMLDivElement>('autoToggle')
 const lengthRoot = byId<HTMLDivElement>('lengthRoot')
 const pickersRoot = byId<HTMLDivElement>('pickersRoot')
 const sizeEl = byId<HTMLInputElement>('size')
+const advancedSettingsEl = byId<HTMLDetailsElement>('advancedSettings')
+const modelPresetEl = byId<HTMLSelectElement>('modelPreset')
+const modelCustomEl = byId<HTMLInputElement>('modelCustom')
+const modelRefreshBtn = byId<HTMLButtonElement>('modelRefresh')
+const modelStatusEl = byId<HTMLDivElement>('modelStatus')
 
 const chatContainerEl = byId<HTMLElement>('chatContainer')
 const chatMessagesEl = byId<HTMLDivElement>('chatMessages')
@@ -761,6 +769,200 @@ function friendlyFetchError(err: unknown, context: string): string {
   return `${context}: ${message}`
 }
 
+function setModelStatus(text: string, state: 'idle' | 'running' | 'error' | 'ok' = 'idle') {
+  modelStatusEl.textContent = text
+  if (state === 'idle') {
+    modelStatusEl.removeAttribute('data-state')
+  } else {
+    modelStatusEl.setAttribute('data-state', state)
+  }
+}
+
+function setDefaultModelPresets() {
+  modelPresetEl.innerHTML = ''
+  const auto = document.createElement('option')
+  auto.value = 'auto'
+  auto.textContent = 'Auto'
+  modelPresetEl.append(auto)
+  const custom = document.createElement('option')
+  custom.value = 'custom'
+  custom.textContent = 'Custom…'
+  modelPresetEl.append(custom)
+}
+
+function setModelPlaceholderFromDiscovery(discovery: {
+  providers?: unknown
+  localModelsSource?: unknown
+}) {
+  const hints: string[] = ['auto']
+  const providers = discovery.providers
+  if (providers && typeof providers === 'object') {
+    const p = providers as Record<string, unknown>
+    if (p.openrouter === true) hints.push('free')
+    if (p.openai === true) hints.push('openai/…')
+    if (p.anthropic === true) hints.push('anthropic/…')
+    if (p.google === true) hints.push('google/…')
+    if (p.xai === true) hints.push('xai/…')
+    if (p.zai === true) hints.push('zai/…')
+  }
+  if (discovery.localModelsSource && typeof discovery.localModelsSource === 'object') {
+    hints.push('local: openai/<id>')
+  }
+  modelCustomEl.placeholder = hints.join(' / ')
+}
+
+function readCurrentModelValue(): string {
+  return readPresetOrCustomValue({
+    presetValue: modelPresetEl.value,
+    customValue: modelCustomEl.value,
+    defaultValue: defaultSettings.model,
+  })
+}
+
+function setModelValue(value: string) {
+  const next = value.trim() || defaultSettings.model
+  const optionValues = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
+  if (optionValues.has(next) && next !== 'custom') {
+    modelPresetEl.value = next
+    modelCustomEl.hidden = true
+    return
+  }
+  modelPresetEl.value = 'custom'
+  modelCustomEl.hidden = false
+  modelCustomEl.value = next
+}
+
+async function refreshModelPresets(token: string) {
+  const previousModel = readCurrentModelValue()
+  const trimmed = token.trim()
+  if (!trimmed) {
+    setDefaultModelPresets()
+    setModelPlaceholderFromDiscovery({})
+    setModelValue(previousModel)
+    return
+  }
+  try {
+    const res = await fetch('http://127.0.0.1:8787/v1/models', {
+      headers: { Authorization: `Bearer ${trimmed}` },
+    })
+    if (!res.ok) {
+      setDefaultModelPresets()
+      setModelValue(previousModel)
+      return
+    }
+    const json = (await res.json()) as unknown
+    if (!json || typeof json !== 'object') return
+    const obj = json as Record<string, unknown>
+    if (obj.ok !== true) return
+
+    setModelPlaceholderFromDiscovery({
+      providers: obj.providers,
+      localModelsSource: obj.localModelsSource,
+    })
+
+    const optionsRaw = obj.options
+    if (!Array.isArray(optionsRaw)) return
+
+    const options = optionsRaw
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const record = item as { id?: unknown; label?: unknown }
+        const id = typeof record.id === 'string' ? record.id.trim() : ''
+        const label = typeof record.label === 'string' ? record.label.trim() : ''
+        if (!id) return null
+        return { id, label }
+      })
+      .filter((x): x is { id: string; label: string } => x !== null)
+
+    if (options.length === 0) {
+      setDefaultModelPresets()
+      setModelValue(previousModel)
+      return
+    }
+
+    setDefaultModelPresets()
+    const seen = new Set(Array.from(modelPresetEl.options).map((o) => o.value))
+    for (const opt of options) {
+      if (seen.has(opt.id)) continue
+      seen.add(opt.id)
+      const el = document.createElement('option')
+      el.value = opt.id
+      el.textContent = opt.label ? `${opt.id} — ${opt.label}` : opt.id
+      modelPresetEl.append(el)
+    }
+    setModelValue(previousModel)
+  } catch {
+    // ignore
+  }
+}
+
+let modelRefreshAt = 0
+const refreshModelsIfStale = () => {
+  const now = Date.now()
+  if (now - modelRefreshAt < 1500) return
+  modelRefreshAt = now
+  void (async () => {
+    const token = (await loadSettings()).token
+    await refreshModelPresets(token)
+  })()
+}
+
+let refreshFreeRunning = false
+
+async function runRefreshFree() {
+  if (refreshFreeRunning) return
+  const token = (await loadSettings()).token.trim()
+  if (!token) {
+    setModelStatus('Setup required (missing token).', 'error')
+    return
+  }
+  refreshFreeRunning = true
+  modelRefreshBtn.disabled = true
+  setModelStatus('Starting scan…', 'running')
+
+  try {
+    const res = await fetch('http://127.0.0.1:8787/v1/refresh-free', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+    const json = (await res.json()) as { ok?: boolean; id?: string; error?: string }
+    if (!res.ok || !json.ok || !json.id) {
+      throw new Error(json.error || `${res.status} ${res.statusText}`)
+    }
+
+    const streamRes = await fetch(`http://127.0.0.1:8787/v1/refresh-free/${json.id}/events`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!streamRes.ok) throw new Error(`${streamRes.status} ${streamRes.statusText}`)
+    if (!streamRes.body) throw new Error('Missing stream body')
+
+    for await (const raw of parseSseStream(streamRes.body)) {
+      const event = parseSseEvent(raw)
+      if (!event) continue
+      if (event.event === 'status') {
+        const text = event.data.text.trim()
+        if (text) setModelStatus(text, 'running')
+      } else if (event.event === 'error') {
+        throw new Error(event.data.message)
+      } else if (event.event === 'done') {
+        break
+      }
+    }
+
+    setModelStatus('Free models updated.', 'ok')
+    await refreshModelPresets(token)
+  } catch (err) {
+    setModelStatus(friendlyFetchError(err, 'Refresh free failed'), 'error')
+  } finally {
+    refreshFreeRunning = false
+    modelRefreshBtn.disabled = false
+  }
+}
+
 const streamController = createStreamController({
   getToken: async () => (await loadSettings()).token,
   onReset: () => {
@@ -1172,6 +1374,10 @@ function updateControls(state: UiState) {
       onLengthChange: pickerHandlers.onLengthChange,
     })
   }
+  if (readCurrentModelValue() !== state.settings.model) {
+    setModelValue(state.settings.model)
+  }
+  modelRefreshBtn.disabled = !state.settings.tokenPresent || refreshFreeRunning
   if (panelState.currentSource) {
     if (state.tab.url && !urlsMatch(state.tab.url, panelState.currentSource.url)) {
       panelState.currentSource = null
@@ -1479,6 +1685,40 @@ sizeEl.addEventListener('input', () => {
   })()
 })
 
+modelPresetEl.addEventListener('change', () => {
+  modelCustomEl.hidden = modelPresetEl.value !== 'custom'
+  if (!modelCustomEl.hidden) modelCustomEl.focus()
+  void (async () => {
+    await patchSettings({ model: readCurrentModelValue() })
+  })()
+})
+
+modelCustomEl.addEventListener('change', () => {
+  void (async () => {
+    await patchSettings({ model: readCurrentModelValue() })
+  })()
+})
+
+modelCustomEl.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter') return
+  event.preventDefault()
+  modelCustomEl.blur()
+  void (async () => {
+    await patchSettings({ model: readCurrentModelValue() })
+  })()
+})
+
+modelPresetEl.addEventListener('focus', refreshModelsIfStale)
+modelPresetEl.addEventListener('pointerdown', refreshModelsIfStale)
+modelCustomEl.addEventListener('focus', refreshModelsIfStale)
+modelCustomEl.addEventListener('pointerdown', refreshModelsIfStale)
+advancedSettingsEl.addEventListener('toggle', () => {
+  if (advancedSettingsEl.open) refreshModelsIfStale()
+})
+modelRefreshBtn.addEventListener('click', () => {
+  void runRefreshFree()
+})
+
 void (async () => {
   const s = await loadSettings()
   sizeEl.value = String(s.fontSize)
@@ -1512,6 +1752,11 @@ void (async () => {
     length: pickerSettings.length,
     onLengthChange: pickerHandlers.onLengthChange,
   })
+  setDefaultModelPresets()
+  setModelValue(s.model)
+  setModelPlaceholderFromDiscovery({})
+  modelCustomEl.hidden = modelPresetEl.value !== 'custom'
+  modelRefreshBtn.disabled = !s.token.trim()
   applyTypography(s.fontFamily, s.fontSize)
   applyTheme({ scheme: s.colorScheme, mode: s.colorMode })
   toggleDrawer(false, { animate: false })

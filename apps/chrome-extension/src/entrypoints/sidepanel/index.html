@@ -37,6 +37,34 @@
         </label>
       </div>
 
+      <details id="advancedSettings" class="drawerAdvanced">
+        <summary>Advanced</summary>
+        <div class="drawerAdvancedBody">
+          <label class="wide">
+            <span>Model</span>
+            <div class="combo modelRow">
+              <select id="modelPreset">
+                <option value="auto">Auto</option>
+                <option value="custom">Custom…</option>
+              </select>
+              <button id="modelRefresh" type="button" class="ghost small" title="Refresh free models">
+                Scan free
+              </button>
+            </div>
+            <input
+              id="modelCustom"
+              type="text"
+              placeholder="auto"
+              autocapitalize="off"
+              autocomplete="off"
+              spellcheck="false"
+              hidden
+            />
+            <div id="modelStatus" class="modelStatus" role="status" aria-live="polite"></div>
+          </label>
+        </div>
+      </details>
+
       <div class="drawerFooter">
         <div id="autoToggle" class="toggleRow"></div>
         <div class="drawerActions">

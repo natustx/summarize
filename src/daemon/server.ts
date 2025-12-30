@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import http from 'node:http'
+import { Writable } from 'node:stream'
 import type { CacheState } from '../cache.js'
 import { loadSummarizeConfig } from '../config.js'
 import { createDaemonLogger } from '../logging/daemon.js'
+import { refreshFree } from '../refresh-free.js'
 import { createCacheStateFromConfig, refreshCacheStoreIfMissing } from '../run/cache-state.js'
 import { formatModelLabelForDisplay } from '../run/finish-line.js'
 import { resolveRunOverrides } from '../run/run-settings.js'
@@ -116,6 +118,29 @@ function parseDiagnostics(raw: unknown): { includeContent: boolean } {
   return { includeContent: Boolean(obj.includeContent) }
 }
 
+function createLineWriter(onLine: (line: string) => void) {
+  let buffer = ''
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      buffer += chunk.toString()
+      let index = buffer.indexOf('\n')
+      while (index >= 0) {
+        const line = buffer.slice(0, index).trimEnd()
+        buffer = buffer.slice(index + 1)
+        if (line.trim().length > 0) onLine(line)
+        index = buffer.indexOf('\n')
+      }
+      callback()
+    },
+    final(callback) {
+      const line = buffer.trim()
+      if (line) onLine(line)
+      buffer = ''
+      callback()
+    },
+  })
+}
+
 function createSession(): Session {
   return {
     id: randomUUID(),
@@ -218,6 +243,8 @@ export async function runDaemonServer({
   })
 
   const sessions = new Map<string, Session>()
+  const refreshSessions = new Map<string, Session>()
+  let activeRefreshSessionId: string | null = null
 
   const server = http.createServer((req, res) => {
     void (async () => {
@@ -258,6 +285,44 @@ export async function runDaemonServer({
           fetchImpl,
         })
         json(res, 200, result, cors)
+        return
+      }
+
+      if (req.method === 'POST' && pathname === '/v1/refresh-free') {
+        if (activeRefreshSessionId) {
+          json(res, 200, { ok: true, id: activeRefreshSessionId, running: true }, cors)
+          return
+        }
+
+        const session = createSession()
+        refreshSessions.set(session.id, session)
+        activeRefreshSessionId = session.id
+        json(res, 200, { ok: true, id: session.id }, cors)
+
+        void (async () => {
+          const pushStatus = (text: string) => {
+            pushToSession(session, { event: 'status', data: { text } }, onSessionEvent)
+          }
+          try {
+            pushStatus('Refresh free: starting…')
+            const stdout = createLineWriter(pushStatus)
+            const stderr = createLineWriter(pushStatus)
+            await refreshFree({ env, fetchImpl, stdout, stderr })
+            pushToSession(session, { event: 'done', data: {} }, onSessionEvent)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            pushToSession(session, { event: 'error', data: { message } }, onSessionEvent)
+            console.error('[summarize-daemon] refresh-free failed', error)
+          } finally {
+            if (activeRefreshSessionId === session.id) {
+              activeRefreshSessionId = null
+            }
+            setTimeout(() => {
+              refreshSessions.delete(session.id)
+              endSession(session)
+            }, 60_000).unref()
+          }
+        })()
         return
       }
 
@@ -641,6 +706,48 @@ export async function runDaemonServer({
           return
         }
         const session = sessions.get(id)
+        if (!session) {
+          json(res, 404, { ok: false, error: 'not found' }, cors)
+          return
+        }
+
+        res.writeHead(200, {
+          ...cors,
+          'content-type': 'text/event-stream; charset=utf-8',
+          'cache-control': 'no-cache, no-transform',
+          connection: 'keep-alive',
+        })
+        session.clients.add(res)
+
+        for (const entry of session.buffer) {
+          res.write(encodeSseEvent(entry.event))
+        }
+        if (session.done) {
+          res.end()
+          session.clients.delete(res)
+          return
+        }
+
+        const keepalive = setInterval(() => {
+          res.write(`: keepalive ${Date.now()}\n\n`)
+        }, 15_000)
+        keepalive.unref()
+
+        res.on('close', () => {
+          clearInterval(keepalive)
+          session.clients.delete(res)
+        })
+        return
+      }
+
+      const refreshEventsMatch = pathname.match(/^\/v1\/refresh-free\/([^/]+)\/events$/)
+      if (req.method === 'GET' && refreshEventsMatch) {
+        const id = refreshEventsMatch[1]
+        if (!id) {
+          json(res, 404, { ok: false }, cors)
+          return
+        }
+        const session = refreshSessions.get(id)
         if (!session) {
           json(res, 404, { ok: false, error: 'not found' }, cors)
           return

@@ -711,6 +711,78 @@ button.ghost:hover {
   margin-top: 10px;
 }
 
+.drawerAdvanced {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.drawerAdvanced summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawerAdvanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.drawerAdvanced summary::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.drawerAdvanced[open] summary::after {
+  transform: rotate(225deg);
+}
+
+.drawerAdvancedBody {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.drawerAdvanced .modelRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawerAdvanced button.ghost.small {
+  padding: 6px 10px;
+  font-size: 11px;
+  min-height: 32px;
+}
+
+.modelStatus {
+  min-height: 14px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.modelStatus[data-state='running'] {
+  color: color-mix(in srgb, var(--accent) 65%, var(--muted));
+}
+
+.modelStatus[data-state='error'] {
+  color: color-mix(in srgb, #ff6b6b 70%, var(--muted));
+}
+
+.modelStatus[data-state='ok'] {
+  color: color-mix(in srgb, var(--accent) 80%, var(--muted));
+}
+
 .drawerActions {
   display: flex;
   align-items: center;
