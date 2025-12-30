@@ -1075,7 +1075,7 @@ header.isError .progressFill {
 }
 
 main {
-  padding: 12px 12px calc(12px + var(--chat-dock-height, 0px));
+  padding: 12px;
   font-size: var(--font-size);
   display: flex;
   flex-direction: column;

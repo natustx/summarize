@@ -12,7 +12,7 @@ import {
   fetchTranscriptFromTranscriptEndpoint,
 } from './youtube/api.js'
 import { fetchTranscriptWithApify } from './youtube/apify.js'
-import { fetchTranscriptFromCaptionTracks } from './youtube/captions.js'
+import { extractYoutubeDurationSeconds, fetchTranscriptFromCaptionTracks } from './youtube/captions.js'
 import { fetchTranscriptWithYtDlp } from './youtube/yt-dlp.js'
 
 const YOUTUBE_URL_PATTERN = /youtube\.com|youtu\.be/i
@@ -58,24 +58,6 @@ export const fetchTranscript = async (
     progress?.({ kind: 'transcript-start', url, service: 'youtube', hint })
   }
 
-  const tryApify = async (hint: string): Promise<ProviderResult | null> => {
-    if (!options.apifyApiToken) return null
-    pushHint(hint)
-    attemptedProviders.push('apify')
-    const apifyTranscript = await fetchTranscriptWithApify(
-      options.fetch,
-      options.apifyApiToken,
-      url
-    )
-    if (!apifyTranscript) return null
-    return {
-      text: normalizeTranscriptText(apifyTranscript),
-      source: 'apify',
-      metadata: { provider: 'apify' },
-      attemptedProviders,
-    }
-  }
-
   if (mode === 'yt-dlp' && !options.ytDlpPath) {
     throw new Error(
       'Missing yt-dlp binary for --youtube yt-dlp (set YT_DLP_PATH or install yt-dlp)'
@@ -89,6 +71,30 @@ export const fetchTranscript = async (
 
   if (!html) {
     return { text: null, source: null, attemptedProviders }
+  }
+
+  const durationSeconds = extractYoutubeDurationSeconds(html)
+  const durationMetadata =
+    typeof durationSeconds === 'number' && Number.isFinite(durationSeconds) && durationSeconds > 0
+      ? { durationSeconds }
+      : null
+
+  const tryApify = async (hint: string): Promise<ProviderResult | null> => {
+    if (!options.apifyApiToken) return null
+    pushHint(hint)
+    attemptedProviders.push('apify')
+    const apifyTranscript = await fetchTranscriptWithApify(
+      options.fetch,
+      options.apifyApiToken,
+      url
+    )
+    if (!apifyTranscript) return null
+    return {
+      text: normalizeTranscriptText(apifyTranscript),
+      source: 'apify',
+      metadata: { provider: 'apify', ...(durationMetadata ?? {}) },
+      attemptedProviders,
+    }
   }
 
   const effectiveVideoIdCandidate = context.resourceKey ?? extractYouTubeVideoId(url)
@@ -117,7 +123,7 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(manualTranscript),
         source: 'captionTracks',
-        metadata: { provider: 'captionTracks', manualOnly: true },
+        metadata: { provider: 'captionTracks', manualOnly: true, ...(durationMetadata ?? {}) },
         attemptedProviders,
       }
     }
@@ -141,7 +147,7 @@ export const fetchTranscript = async (
         return {
           text: normalizeTranscriptText(transcript),
           source: 'youtubei',
-          metadata: { provider: 'youtubei' },
+          metadata: { provider: 'youtubei', ...(durationMetadata ?? {}) },
           attemptedProviders,
         }
       }
@@ -162,7 +168,7 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(captionTranscript),
         source: 'captionTracks',
-        metadata: { provider: 'captionTracks' },
+        metadata: { provider: 'captionTracks', ...(durationMetadata ?? {}) },
         attemptedProviders,
       }
     }
@@ -197,7 +203,11 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(ytdlpResult.text),
         source: 'yt-dlp',
-        metadata: { provider: 'yt-dlp', transcriptionProvider: ytdlpResult.provider },
+        metadata: {
+          provider: 'yt-dlp',
+          transcriptionProvider: ytdlpResult.provider,
+          ...(durationMetadata ?? {}),
+        },
         attemptedProviders,
         notes: notes.length > 0 ? notes.join('; ') : null,
       }
@@ -232,7 +242,7 @@ export const fetchTranscript = async (
   return {
     text: null,
     source: 'unavailable',
-    metadata: { provider: 'youtube', reason: 'no_transcript_available' },
+    metadata: { provider: 'youtube', reason: 'no_transcript_available', ...(durationMetadata ?? {}) },
     attemptedProviders,
     notes: notes.length > 0 ? notes.join('; ') : null,
   }

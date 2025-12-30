@@ -101,6 +101,35 @@ function extractInitialPlayerResponse(html: string): Record<string, unknown> | n
 const isObjectLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+function coerceDurationSeconds(value: unknown): number | null {
+  const asNumber =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  if (!Number.isFinite(asNumber) || asNumber <= 0) return null
+  return asNumber
+}
+
+export function extractYoutubeDurationSeconds(html: string): number | null {
+  const playerResponse = extractInitialPlayerResponse(html)
+  if (!playerResponse) return null
+
+  const videoDetails = playerResponse.videoDetails
+  if (isObjectLike(videoDetails)) {
+    const duration = coerceDurationSeconds(videoDetails.lengthSeconds)
+    if (duration) return duration
+  }
+
+  const microformat = playerResponse.microformat
+  if (isObjectLike(microformat)) {
+    const renderer = microformat.playerMicroformatRenderer
+    if (isObjectLike(renderer)) {
+      const duration = coerceDurationSeconds(renderer.lengthSeconds)
+      if (duration) return duration
+    }
+  }
+
+  return null
+}
+
 function extractInnertubeApiKey(html: string): string | null {
   const match = html.match(INNERTUBE_API_KEY_REGEX)
   const key = match?.[1] ?? match?.[2] ?? null
