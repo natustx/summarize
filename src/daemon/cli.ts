@@ -415,7 +415,7 @@ export async function handleDaemonRequest({
       fetchImpl,
       port: cfg.port,
       attempts: 3,
-      timeoutMs: 6000,
+      timeoutMs: 10000,
       delayMs: 500,
     })
     const authed = await checkAuthWithRetries({
