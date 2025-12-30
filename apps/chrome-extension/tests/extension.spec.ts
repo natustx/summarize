@@ -1137,12 +1137,18 @@ test('options keeps custom model selected while presets refresh', async () => {
     await expect.poll(() => modelCalls).toBeGreaterThanOrEqual(1)
     await expect(page.locator('#modelPreset')).toHaveValue('auto')
 
-    await page.click('#modelPreset')
-    await expect.poll(() => modelCalls).toBe(2)
-    await page.selectOption('#modelPreset', 'custom')
+    await page.evaluate(() => {
+      const preset = document.getElementById('modelPreset') as HTMLSelectElement | null
+      if (!preset) return
+      preset.value = 'custom'
+      preset.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     await expect(page.locator('#modelCustom')).toBeVisible()
 
+    await page.locator('#modelCustom').focus()
+    await expect.poll(() => modelCalls).toBe(2)
     releaseSecond?.()
+
     await expect(page.locator('#modelPreset')).toHaveValue('custom')
     await expect(page.locator('#modelCustom')).toBeVisible()
     assertNoErrors(harness)
