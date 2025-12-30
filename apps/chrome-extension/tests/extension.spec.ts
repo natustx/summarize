@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { BrowserContext, Page } from '@playwright/test'
+import type { BrowserContext, Page, Worker } from '@playwright/test'
 import { chromium, expect, test } from '@playwright/test'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -104,10 +104,15 @@ async function launchExtension(): Promise<ExtensionHarness> {
   }
 }
 
-async function sendBgMessage(harness: ExtensionHarness, message: object) {
-  const background =
+async function getBackground(harness: ExtensionHarness): Promise<Worker> {
+  return (
     harness.context.serviceWorkers()[0] ??
     (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  )
+}
+
+async function sendBgMessage(harness: ExtensionHarness, message: object) {
+  const background = await getBackground(harness)
   await background.evaluate((payload) => {
     chrome.runtime.sendMessage(payload)
   }, message)
@@ -120,9 +125,7 @@ async function sendPanelMessage(page: Page, message: object) {
 }
 
 async function injectContentScript(harness: ExtensionHarness, file: string, urlPrefix?: string) {
-  const background =
-    harness.context.serviceWorkers()[0] ??
-    (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  const background = await getBackground(harness)
   const result = await Promise.race([
     background.evaluate(
       async ({ scriptFile, prefix }) => {
@@ -151,9 +154,7 @@ async function injectContentScript(harness: ExtensionHarness, file: string, urlP
 }
 
 async function mockDaemonSummarize(harness: ExtensionHarness) {
-  const background =
-    harness.context.serviceWorkers()[0] ??
-    (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  const background = await getBackground(harness)
   await background.evaluate(() => {
     const originalFetch =
       (globalThis.__originalFetch as typeof globalThis.fetch | undefined) ?? globalThis.fetch
@@ -944,70 +945,72 @@ test('sidepanel updates title while streaming on same URL', async () => {
   }
 })
 
-test.fixme(
-  'hover tooltip proxies daemon calls via background (no page-origin localhost fetch)',
-  async () => {
-    test.setTimeout(30_000)
-    const harness = await launchExtension()
+test('hover tooltip proxies daemon calls via background (no page-origin localhost fetch)', async () => {
+  test.setTimeout(30_000)
+  const harness = await launchExtension()
 
-    try {
-      await seedSettings(harness, { token: 'test-token', hoverSummaries: true })
-      await mockDaemonSummarize(harness)
+  try {
+    await seedSettings(harness, { token: 'test-token', hoverSummaries: true })
+    await mockDaemonSummarize(harness)
 
-      let eventsCalls = 0
+    let eventsCalls = 0
 
-      const sseBody = [
-        'event: chunk',
-        'data: {"text":"Hello hover"}',
-        '',
-        'event: done',
-        'data: {}',
-        '',
-      ].join('\n')
-      await harness.context.route(
-        /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
-        async (route) => {
-          eventsCalls += 1
-          await route.fulfill({
-            status: 200,
-            headers: { 'content-type': 'text/event-stream' },
-            body: sseBody,
-          })
-        }
-      )
-
-      const page = await harness.context.newPage()
-      trackErrors(page, harness.pageErrors, harness.consoleErrors)
-      await page.goto('https://example.com', { waitUntil: 'domcontentloaded' })
-      await page.bringToFront()
-      await activateTabByUrl(harness, 'https://example.com')
-      await waitForActiveTabUrl(harness, 'https://example.com')
-      const optionsPage = await openExtensionPage(harness, 'options.html', '#pickersRoot')
-      const storedSettings = await optionsPage.evaluate(async () => {
-        const result = await chrome.storage.local.get('settings')
-        return result.settings ?? null
-      })
-      expect(storedSettings).toEqual(expect.objectContaining({ token: 'test-token' }))
-      const hoverResponse = await optionsPage.evaluate(async () => {
-        return chrome.runtime.sendMessage({
-          type: 'hover:summarize',
-          requestId: 'hover-1',
-          url: 'https://example.com/next',
-          title: 'Next',
-          token: 'test-token',
+    const sseBody = [
+      'event: chunk',
+      'data: {"text":"Hello hover"}',
+      '',
+      'event: done',
+      'data: {}',
+      '',
+    ].join('\n')
+    await harness.context.route(
+      /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
+      async (route) => {
+        eventsCalls += 1
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+          body: sseBody,
         })
+      }
+    )
+
+    const page = await harness.context.newPage()
+    trackErrors(page, harness.pageErrors, harness.consoleErrors)
+    await page.goto('https://example.com', { waitUntil: 'domcontentloaded' })
+    await page.bringToFront()
+    await activateTabByUrl(harness, 'https://example.com')
+    await waitForActiveTabUrl(harness, 'https://example.com')
+
+    const background = await getBackground(harness)
+    const hoverResponse = await background.evaluate(async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (!tab?.id) return { ok: false, error: 'missing tab' }
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'ISOLATED',
+        func: async () => {
+          return chrome.runtime.sendMessage({
+            type: 'hover:summarize',
+            requestId: 'hover-1',
+            url: 'https://example.com/next',
+            title: 'Next',
+            token: 'test-token',
+          })
+        },
       })
-      expect(hoverResponse).toEqual(expect.objectContaining({ ok: true }))
+      return result?.result ?? { ok: false, error: 'no response' }
+    })
+    expect(hoverResponse).toEqual(expect.objectContaining({ ok: true }))
 
-      await expect.poll(() => getSummarizeCalls(harness)).toBeGreaterThan(0)
-      await expect.poll(() => eventsCalls).toBeGreaterThan(0)
+    await expect.poll(() => getSummarizeCalls(harness)).toBeGreaterThan(0)
+    await expect.poll(() => eventsCalls).toBeGreaterThan(0)
 
-      assertNoErrors(harness)
-    } finally {
-      await closeExtension(harness.context, harness.userDataDir)
-    }
+    assertNoErrors(harness)
+  } finally {
+    await closeExtension(harness.context, harness.userDataDir)
   }
-)
+})
 
 test('content script extracts visible duration metadata', async () => {
   test.setTimeout(45_000)
@@ -1035,9 +1038,7 @@ test('content script extracts visible duration metadata', async () => {
     await waitForActiveTabUrl(harness, 'https://example.com')
     await injectContentScript(harness, 'content-scripts/extract.js', 'https://example.com')
 
-    const background =
-      harness.context.serviceWorkers()[0] ??
-      (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+    const background = await getBackground(harness)
     const extractResult = await background.evaluate(async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       if (!tab?.id) return { ok: false, error: 'missing tab' }
