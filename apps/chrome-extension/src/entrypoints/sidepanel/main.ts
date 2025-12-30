@@ -988,6 +988,7 @@ async function runRefreshFree() {
   refreshFreeRunning = true
   modelRefreshBtn.disabled = true
   setModelStatus('Starting scan…', 'running')
+  let winnerModel: string | null = null
 
   try {
     const res = await fetch('http://127.0.0.1:8787/v1/refresh-free', {
@@ -1014,7 +1015,13 @@ async function runRefreshFree() {
       if (!event) continue
       if (event.event === 'status') {
         const text = event.data.text.trim()
-        if (text) setModelStatus(text, 'running')
+        if (text) {
+          if (!winnerModel) {
+            const match = text.match(/^-\\s+([^\\s]+)/)
+            if (match && match[1]) winnerModel = match[1]
+          }
+          setModelStatus(text, 'running')
+        }
       } else if (event.event === 'error') {
         throw new Error(event.data.message)
       } else if (event.event === 'done') {
@@ -1022,7 +1029,8 @@ async function runRefreshFree() {
       }
     }
 
-    setModelStatus('Free models updated.', 'ok')
+    const winnerNote = winnerModel ? ` Top: ${winnerModel}` : ''
+    setModelStatus(`Free models updated.${winnerNote}`, 'ok')
     await refreshModelPresets(token)
   } catch (err) {
     setModelStatus(friendlyFetchError(err, 'Refresh free failed'), 'error')

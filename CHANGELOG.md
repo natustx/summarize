@@ -22,6 +22,7 @@
 - Chrome Side Panel: prefer media on video/podcast sites and show selected source on the summarize button.
 - Chrome Side Panel: replace font size slider with A/AA toggle and label San Francisco explicitly.
 - Chrome Side Panel: widen font selector and unify model control into a single row.
+- Chrome Side Panel: show the top free model after “Scan free” completes.
 - Chrome Side Panel: Summarize button becomes a dropdown when media is detected (Page vs Video/Audio).
 - Hover summaries: prompt customization and tighter prompts for cleaner tooltips.
 - Daemon: expose version in health, plus a status pill in the Side Panel header.
