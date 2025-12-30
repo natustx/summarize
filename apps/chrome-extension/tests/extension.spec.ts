@@ -86,6 +86,9 @@ async function launchExtension(): Promise<ExtensionHarness> {
     headless: false,
     args,
   })
+  await context.route('**/favicon.ico', async (route) => {
+    await route.fulfill({ status: 204, body: '' })
+  })
 
   const background =
     context.serviceWorkers()[0] ??
@@ -114,6 +117,20 @@ async function sendPanelMessage(page: Page, message: object) {
   await page.evaluate((payload) => {
     chrome.runtime.sendMessage(payload)
   }, message)
+}
+
+async function injectContentScript(harness: ExtensionHarness, file: string) {
+  const background =
+    harness.context.serviceWorkers()[0] ??
+    (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  await background.evaluate(async (scriptFile) => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (!tab?.id) return
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [scriptFile],
+    })
+  }, file)
 }
 
 async function mockDaemonSummarize(harness: ExtensionHarness) {
@@ -327,13 +344,16 @@ test('sidepanel updates title after stream when tab title changes', async () => 
       '',
     ].join('\n')
 
-    await page.route('http://127.0.0.1:8787/v1/summarize/**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'content-type': 'text/event-stream' },
-        body: sseBody,
-      })
-    })
+    await harness.context.route(
+      /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+          body: sseBody,
+        })
+      }
+    )
 
     await sendBgMessage(harness, {
       type: 'run:start',
@@ -592,6 +612,7 @@ test('hover tooltip proxies daemon calls via background (no page-origin localhos
     const page = await harness.context.newPage()
     trackErrors(page, harness.pageErrors, harness.consoleErrors)
     await page.goto('https://example.com', { waitUntil: 'domcontentloaded' })
+    await injectContentScript(harness, 'content-scripts/hover.js')
 
     await page.evaluate(() => {
       const link = document.createElement('a')

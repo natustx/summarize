@@ -258,7 +258,11 @@ export const fetchTranscript = async (
   return {
     text: null,
     source: 'unavailable',
-    metadata: { provider: 'youtube', reason: 'no_transcript_available', ...(durationMetadata ?? {}) },
+    metadata: {
+      provider: 'youtube',
+      reason: 'no_transcript_available',
+      ...(durationMetadata ?? {}),
+    },
     attemptedProviders,
     notes: notes.length > 0 ? notes.join('; ') : null,
   }

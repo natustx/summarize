@@ -21,9 +21,7 @@ function clampText(text: string, maxChars: number): { text: string; truncated: b
 }
 
 function resolveMediaDurationSeconds(): number | null {
-  const metaDuration = document
-    .querySelector('meta[itemprop="duration"]')
-    ?.getAttribute('content')
+  const metaDuration = document.querySelector('meta[itemprop="duration"]')?.getAttribute('content')
   const uiDuration = document.querySelector('.ytp-time-duration')?.textContent?.trim()
   const media = document.querySelector('video')
   const videoDuration =
