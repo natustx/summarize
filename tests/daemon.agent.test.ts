@@ -1,10 +1,8 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-
 import type { AssistantMessage, Tool } from '@mariozechner/pi-ai'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { completeAgentResponse } from '../src/daemon/agent.js'
 
 const mockCompleteSimple = vi.fn()
@@ -53,7 +51,9 @@ const makeTempHome = () => mkdtempSync(join(tmpdir(), 'summarize-daemon-agent-')
 beforeEach(() => {
   mockCompleteSimple.mockReset()
   mockGetModel.mockReset()
-  mockGetModel.mockImplementation((provider: string, modelId: string) => makeModel(provider, modelId))
+  mockGetModel.mockImplementation((provider: string, modelId: string) =>
+    makeModel(provider, modelId)
+  )
   mockCompleteSimple.mockImplementation(async (model: { provider: string; id: string }) =>
     buildAssistant(model.provider, model.id)
   )

@@ -857,37 +857,39 @@ const importSkills = async () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'application/json,.json'
-  input.addEventListener('change', async () => {
-    const file = input.files?.[0]
-    if (!file) return
-    try {
-      const text = await file.text()
-      const parsed = JSON.parse(text)
-      if (!Array.isArray(parsed)) {
-        setStatus('Invalid skills file: expected an array.')
-        return
-      }
-      const incoming = parsed.map(coerceSkill).filter((skill): skill is Skill => Boolean(skill))
-      importedSkills = incoming
+  input.addEventListener('change', () => {
+    void (async () => {
+      const file = input.files?.[0]
+      if (!file) return
+      try {
+        const text = await file.text()
+        const parsed = JSON.parse(text)
+        if (!Array.isArray(parsed)) {
+          setStatus('Invalid skills file: expected an array.')
+          return
+        }
+        const incoming = parsed.map(coerceSkill).filter((skill): skill is Skill => Boolean(skill))
+        importedSkills = incoming
 
-      const conflicts: Array<{ skill: Skill; selected: boolean }> = []
-      for (const skill of incoming) {
-        const existing = await getSkill(skill.name)
-        if (existing) conflicts.push({ skill, selected: true })
-      }
+        const conflicts: Array<{ skill: Skill; selected: boolean }> = []
+        for (const skill of incoming) {
+          const existing = await getSkill(skill.name)
+          if (existing) conflicts.push({ skill, selected: true })
+        }
 
-      if (conflicts.length > 0) {
-        importConflicts = conflicts
-        renderSkills()
-        return
-      }
+        if (conflicts.length > 0) {
+          importConflicts = conflicts
+          renderSkills()
+          return
+        }
 
-      await performImport(incoming)
-    } catch (error) {
-      setStatus(
-        `Failed to import skills: ${error instanceof Error ? error.message : String(error)}`
-      )
-    }
+        await performImport(incoming)
+      } catch (error) {
+        setStatus(
+          `Failed to import skills: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    })()
   })
   input.click()
 }
@@ -1035,7 +1037,7 @@ tokenEl.addEventListener('input', () => {
   }, 350)
 })
 
-tokenCopyBtn.addEventListener('click', async () => {
+const copyToken = async () => {
   const token = tokenEl.value.trim()
   if (!token) {
     flashStatus('Token empty')
@@ -1053,6 +1055,10 @@ tokenCopyBtn.addEventListener('click', async () => {
   tokenEl.setSelectionRange(0, token.length)
   const ok = document.execCommand('copy')
   flashStatus(ok ? 'Token copied' : 'Copy failed')
+}
+
+tokenCopyBtn.addEventListener('click', () => {
+  void copyToken()
 })
 
 let modelRefreshAt = 0

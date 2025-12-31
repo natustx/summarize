@@ -157,7 +157,7 @@ export async function fetchSpotifyTranscript(
       return {
         text: maybeTranscript.text,
         source: 'podcastTranscript',
-        segments: flow.options.transcriptTimestamps ? maybeTranscript.segments ?? null : null,
+        segments: flow.options.transcriptTimestamps ? (maybeTranscript.segments ?? null) : null,
         attemptedProviders: flow.attemptedProviders,
         notes: joinNotes(flow.notes),
         metadata: {

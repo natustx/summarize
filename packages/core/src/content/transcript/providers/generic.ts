@@ -1,6 +1,7 @@
 import { load } from 'cheerio'
 import { isWhisperCppReady } from '../../../transcription/whisper.js'
 import { isTwitterStatusUrl } from '../../link-preview/content/twitter-utils.js'
+import type { TranscriptSegment } from '../../link-preview/types.js'
 import { isDirectMediaUrl } from '../../url.js'
 import { normalizeTranscriptText } from '../normalize.js'
 import {
@@ -9,7 +10,6 @@ import {
   vttToPlainText,
   vttToSegments,
 } from '../parse.js'
-import type { TranscriptSegment } from '../../link-preview/types.js'
 import type { ProviderContext, ProviderFetchOptions, ProviderResult } from '../types.js'
 
 export const canHandle = (): boolean => true
@@ -34,7 +34,7 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(caption.text),
         source: 'embedded',
-        segments: options.transcriptTimestamps ? caption.segments ?? null : null,
+        segments: options.transcriptTimestamps ? (caption.segments ?? null) : null,
         attemptedProviders,
         metadata: {
           provider: 'embedded',

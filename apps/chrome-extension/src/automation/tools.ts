@@ -1,7 +1,7 @@
 import type { ToolCall, ToolResultMessage } from '@mariozechner/pi-ai'
 import { parseSseEvent } from '../../../../src/shared/sse-events.js'
-import { parseSseStream } from '../lib/sse'
 import { loadSettings } from '../lib/settings'
+import { parseSseStream } from '../lib/sse'
 import { executeAskUserWhichElementTool } from './ask-user-which-element'
 import { executeNavigateTool } from './navigate'
 import { executeReplTool } from './repl'
@@ -153,8 +153,7 @@ async function executeSummarizeTool(args: SummarizeToolArgs): Promise<SummarizeT
     | { ok: false; error?: string }
 
   if (!res.ok || !json.ok) {
-    const error =
-      (json as { error?: string }).error ?? `${res.status} ${res.statusText}`.trim()
+    const error = (json as { error?: string }).error ?? `${res.status} ${res.statusText}`.trim()
     throw new Error(error || 'Summarize failed')
   }
 

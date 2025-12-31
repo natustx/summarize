@@ -304,8 +304,8 @@ function showReplOverlay(message?: string) {
   document.body.appendChild(overlay)
 
   const requestAbort = () => {
-    chrome.runtime.sendMessage({ type: 'automation:abort-repl' })
-    chrome.runtime.sendMessage({ type: 'automation:abort-agent' })
+    void chrome.runtime.sendMessage({ type: 'automation:abort-repl' })
+    void chrome.runtime.sendMessage({ type: 'automation:abort-agent' })
     hideReplOverlay()
   }
 

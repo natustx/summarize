@@ -185,7 +185,7 @@ export const resolveTranscriptForLink = async (
     source: providerResult.source,
     metadata: providerResult.metadata ?? null,
     diagnostics,
-    segments: transcriptTimestamps ? providerResult.segments ?? null : null,
+    segments: transcriptTimestamps ? (providerResult.segments ?? null) : null,
   }
 }
 

@@ -1,7 +1,9 @@
-import MarkdownIt from 'markdown-it'
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from '@mariozechner/pi-ai'
+import MarkdownIt from 'markdown-it'
 
 import { parseSseEvent } from '../../../../../src/shared/sse-events.js'
+import { listSkills } from '../../automation/skills-store'
+import { executeToolCall, getAutomationToolNames } from '../../automation/tools'
 import { readPresetOrCustomValue } from '../../lib/combo'
 import { buildIdleSubtitle } from '../../lib/header'
 import { buildMetricsParts, buildMetricsTokens } from '../../lib/metrics'
@@ -10,8 +12,6 @@ import { parseSseStream } from '../../lib/sse'
 import { applyTheme } from '../../lib/theme'
 import { generateToken } from '../../lib/token'
 import { mountCheckbox } from '../../ui/zag-checkbox'
-import { executeToolCall, getAutomationToolNames } from '../../automation/tools'
-import { listSkills } from '../../automation/skills-store'
 import { ChatController } from './chat-controller'
 import { type ChatHistoryLimits, compactChatHistory } from './chat-state'
 import { createHeaderController } from './header-controller'
@@ -36,11 +36,6 @@ type PanelToBg =
   | { type: 'panel:setAuto'; value: boolean }
   | { type: 'panel:setLength'; value: string }
   | { type: 'panel:openOptions' }
-
-type ChatStartPayload = {
-  id: string
-  url: string
-}
 
 type BgToPanel =
   | { type: 'ui:state'; state: UiState }
@@ -185,7 +180,6 @@ let chatHistoryLoadId = 0
 let activeTabId: number | null = null
 let activeTabUrl: string | null = null
 let lastStreamError: string | null = null
-let lastChatError: string | null = null
 let lastAction: 'summarize' | 'chat' | null = null
 let abortAgentRequested = false
 let lastNavigationMessageUrl: string | null = null
@@ -265,7 +259,7 @@ async function requestAgent(messages: Message[], tools: string[], summary?: stri
         reject(error)
       },
     })
-    send({ type: 'panel:agent', requestId, messages, tools, summary })
+    void send({ type: 'panel:agent', requestId, messages, tools, summary })
   })
   return response
 }
@@ -886,7 +880,7 @@ const pickerHandlers = {
   },
   onLengthChange: (value) => {
     pickerSettings = { ...pickerSettings, length: value }
-    send({ type: 'panel:setLength', value })
+    void send({ type: 'panel:setLength', value })
   },
 }
 
@@ -910,7 +904,7 @@ const autoToggle = mountCheckbox(autoToggleRoot, {
   checked: autoValue,
   onCheckedChange: (checked) => {
     autoValue = checked
-    send({ type: 'panel:setAuto', value: checked })
+    void send({ type: 'panel:setAuto', value: checked })
   },
 })
 
@@ -1344,7 +1338,7 @@ const streamController = createStreamController({
       setPhase(phase)
     }
   },
-  onRememberUrl: (url) => send({ type: 'panel:rememberUrl', url }),
+  onRememberUrl: (url) => void send({ type: 'panel:rememberUrl', url }),
   onMeta: (data) => {
     panelState.lastMeta = {
       model: typeof data.model === 'string' ? data.model : panelState.lastMeta.model,
@@ -1700,7 +1694,7 @@ function updateControls(state: UiState) {
     checked: autoValue,
     onCheckedChange: (checked) => {
       autoValue = checked
-      send({ type: 'panel:setAuto', value: checked })
+      void send({ type: 'panel:setAuto', value: checked })
     },
   })
   chatEnabledValue = state.settings.chatEnabled
@@ -1839,7 +1833,7 @@ async function send(message: PanelToBg) {
 }
 
 function sendSummarize(opts?: { refresh?: boolean }) {
-  send({
+  void send({
     type: 'panel:summarize',
     refresh: Boolean(opts?.refresh),
     inputMode: inputModeOverride ?? undefined,
@@ -2035,7 +2029,6 @@ function startChatMessage(text: string) {
       await runAgentLoop()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      lastChatError = message
       headerController.setStatus(`Error: ${message}`)
       setPhase('error', { error: message })
     } finally {
@@ -2072,7 +2065,6 @@ function retryChat() {
       await runAgentLoop()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      lastChatError = message
       headerController.setStatus(`Error: ${message}`)
       setPhase('error', { error: message })
     } finally {
@@ -2116,7 +2108,9 @@ function sendChatMessage() {
 refreshBtn.addEventListener('click', () => sendSummarize({ refresh: true }))
 errorRetryBtn.addEventListener('click', () => retryLastAction())
 drawerToggleBtn.addEventListener('click', () => toggleDrawer())
-advancedBtn.addEventListener('click', () => send({ type: 'panel:openOptions' }))
+advancedBtn.addEventListener('click', () => {
+  void send({ type: 'panel:openOptions' })
+})
 
 chatSendBtn.addEventListener('click', sendChatMessage)
 chatInputEl.addEventListener('keydown', (e) => {
@@ -2203,7 +2197,7 @@ void (async () => {
     checked: autoValue,
     onCheckedChange: (checked) => {
       autoValue = checked
-      send({ type: 'panel:setAuto', value: checked })
+      void send({ type: 'panel:setAuto', value: checked })
     },
   })
   applyChatEnabled()
@@ -2233,12 +2227,12 @@ void (async () => {
   applyTypography(s.fontFamily, s.fontSize, s.lineHeight)
   applyTheme({ scheme: s.colorScheme, mode: s.colorMode })
   toggleDrawer(false, { animate: false })
-  send({ type: 'panel:ready' })
+  void send({ type: 'panel:ready' })
   scheduleAutoKick()
 })()
 
 setInterval(() => {
-  send({ type: 'panel:ping' })
+  void send({ type: 'panel:ping' })
 }, 25_000)
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -2262,7 +2256,7 @@ let panelMarkedOpen = document.visibilityState === 'visible'
 function markPanelOpen() {
   if (panelMarkedOpen) return
   panelMarkedOpen = true
-  send({ type: 'panel:ready' })
+  void send({ type: 'panel:ready' })
   scheduleAutoKick()
   void syncWithActiveTab()
 }
@@ -2271,7 +2265,7 @@ function markPanelClosed() {
   if (!panelMarkedOpen) return
   panelMarkedOpen = false
   window.clearTimeout(autoKickTimer)
-  send({ type: 'panel:closed' })
+  void send({ type: 'panel:closed' })
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -2304,5 +2298,5 @@ window.addEventListener('keydown', (event) => {
 })
 
 window.addEventListener('beforeunload', () => {
-  send({ type: 'panel:closed' })
+  void send({ type: 'panel:closed' })
 })

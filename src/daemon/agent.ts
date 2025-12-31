@@ -1,7 +1,7 @@
 import type { Api, AssistantMessage, Message, Model, Tool } from '@mariozechner/pi-ai'
 import { completeSimple, getModel } from '@mariozechner/pi-ai'
-import { buildAutoModelAttempts } from '../model-auto.js'
 import { createSyntheticModel } from '../llm/providers/shared.js'
+import { buildAutoModelAttempts } from '../model-auto.js'
 import { resolveRunContextState } from '../run/run-context.js'
 import { resolveModelSelection } from '../run/run-models.js'
 import { resolveRunOverrides } from '../run/run-settings.js'
@@ -95,10 +95,14 @@ const TOOL_DEFINITIONS: Record<string, Tool> = {
           enum: ['get', 'list', 'create', 'rewrite', 'update', 'delete'],
           description: 'Action to perform',
         },
-        name: { type: 'string', description: 'Skill name (required for get/rewrite/update/delete)' },
+        name: {
+          type: 'string',
+          description: 'Skill name (required for get/rewrite/update/delete)',
+        },
         url: {
           type: 'string',
-          description: 'URL to filter skills by (optional for list action; defaults to current tab)',
+          description:
+            'URL to filter skills by (optional for list action; defaults to current tab)',
         },
         includeLibraryCode: {
           type: 'boolean',
@@ -113,7 +117,8 @@ const TOOL_DEFINITIONS: Record<string, Tool> = {
             domainPatterns: {
               type: 'array',
               items: { type: 'string' },
-              description: 'Glob-like domain patterns (e.g., ["github.com", "github.com/*/issues"])',
+              description:
+                'Glob-like domain patterns (e.g., ["github.com", "github.com/*/issues"])',
             },
             shortDescription: { type: 'string', description: 'One-line description' },
             description: { type: 'string', description: 'Full markdown description' },
@@ -314,7 +319,10 @@ function resolveModelWithFallback({
   baseUrl: string | null
 }): Model<Api> {
   try {
-    return overrideModelBaseUrl(getModel(provider as never, modelId as never) as Model<Api>, baseUrl)
+    return overrideModelBaseUrl(
+      getModel(provider as never, modelId as never) as Model<Api>,
+      baseUrl
+    )
   } catch (error) {
     if (baseUrl) {
       return createSyntheticModel({

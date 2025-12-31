@@ -1,10 +1,10 @@
+import type { TranscriptSegment } from '../../../link-preview/types.js'
 import {
   jsonTranscriptToPlainText,
   jsonTranscriptToSegments,
   vttToPlainText,
   vttToSegments,
 } from '../../parse.js'
-import type { TranscriptSegment } from '../../../link-preview/types.js'
 import { TRANSCRIPTION_TIMEOUT_MS } from './constants.js'
 
 export function looksLikeRssOrAtomFeed(xml: string): boolean {
@@ -122,15 +122,12 @@ export async function tryFetchTranscriptFromFeedXml({
   feedXml: string
   episodeTitle: string | null
   notes: string[]
-}): Promise<
-  | {
-      text: string
-      transcriptUrl: string
-      transcriptType: string | null
-      segments: TranscriptSegment[] | null
-    }
-  | null
-> {
+}): Promise<{
+  text: string
+  transcriptUrl: string
+  transcriptType: string | null
+  segments: TranscriptSegment[] | null
+} | null> {
   const items = feedXml.match(/<item\b[\s\S]*?<\/item>/gi) ?? []
   const normalizedTarget = episodeTitle ? normalizeLooseTitle(episodeTitle) : null
 

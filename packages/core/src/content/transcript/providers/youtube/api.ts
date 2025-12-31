@@ -1,7 +1,7 @@
 import { fetchWithTimeout } from '../../../link-preview/fetch-with-timeout.js'
 import type { TranscriptSegment } from '../../../link-preview/types.js'
-import { extractYoutubeBootstrapConfig, isRecord } from '../../utils.js'
 import { parseTimestampToMs } from '../../timestamps.js'
+import { extractYoutubeBootstrapConfig, isRecord } from '../../utils.js'
 
 const REQUEST_HEADERS: Record<string, string> = {
   'User-Agent':

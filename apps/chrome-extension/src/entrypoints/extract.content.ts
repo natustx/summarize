@@ -156,11 +156,11 @@ function seekToSeconds(seconds: number): SeekResponse {
   }
 
   const player = document.getElementById('movie_player') as
-    | (HTMLElement & { seekTo?: (time: number, allowSeekAhead?: boolean) => void }) & {
+    | ((HTMLElement & { seekTo?: (time: number, allowSeekAhead?: boolean) => void }) & {
         getPlayerState?: () => number
         pauseVideo?: () => void
         playVideo?: () => void
-      }
+      })
     | null
   if (player?.seekTo) {
     const state = typeof player.getPlayerState === 'function' ? player.getPlayerState() : null

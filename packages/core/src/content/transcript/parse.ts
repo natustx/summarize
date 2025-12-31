@@ -13,7 +13,7 @@ export function vttToSegments(raw: string): TranscriptSegment[] | null {
 
   let idx = 0
   while (idx < lines.length) {
-    let line = lines[idx]?.trim() ?? ''
+    const line = lines[idx]?.trim() ?? ''
     if (!line || line.toUpperCase() === 'WEBVTT' || /^(NOTE|STYLE|REGION)\b/i.test(line)) {
       idx += 1
       continue
@@ -56,7 +56,10 @@ export function vttToSegments(raw: string): TranscriptSegment[] | null {
 export function vttToPlainText(raw: string): string {
   const segments = vttToSegments(raw)
   if (segments) {
-    return segments.map((segment) => segment.text).join('\n').trim()
+    return segments
+      .map((segment) => segment.text)
+      .join('\n')
+      .trim()
   }
 
   const lines = raw
@@ -121,7 +124,10 @@ export function jsonTranscriptToPlainText(payload: unknown): string | null {
   if (Array.isArray(payload)) {
     const segments = jsonTranscriptToSegments(payload)
     if (segments) {
-      const text = segments.map((segment) => segment.text).join('\n').trim()
+      const text = segments
+        .map((segment) => segment.text)
+        .join('\n')
+        .trim()
       return text.length > 0 ? text : null
     }
     const parts = payload
@@ -142,7 +148,10 @@ export function jsonTranscriptToPlainText(payload: unknown): string | null {
     if (Array.isArray(segments)) {
       const segmentText = jsonTranscriptToSegments(record)
       if (segmentText) {
-        const text = segmentText.map((segment) => segment.text).join('\n').trim()
+        const text = segmentText
+          .map((segment) => segment.text)
+          .join('\n')
+          .trim()
         return text.length > 0 ? text : null
       }
       const parts = segments

@@ -159,12 +159,7 @@ const parseOptionalBoolean = (raw: unknown, strict: boolean): boolean | null => 
   if (normalized === 'true' || normalized === '1' || normalized === 'yes' || normalized === 'on') {
     return true
   }
-  if (
-    normalized === 'false' ||
-    normalized === '0' ||
-    normalized === 'no' ||
-    normalized === 'off'
-  ) {
+  if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') {
     return false
   }
   if (strict) {

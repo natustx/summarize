@@ -56,9 +56,7 @@ export async function readLaunchAgentProgramArguments(
   const plistPath = resolveLaunchAgentPlistPath(env)
   try {
     const plist = await fs.readFile(plistPath, 'utf8')
-    const programMatch = plist.match(
-      /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/i
-    )
+    const programMatch = plist.match(/<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/i)
     if (!programMatch) return null
     const args = Array.from(programMatch[1].matchAll(/<string>([\s\S]*?)<\/string>/gi)).map(
       (match) => plistUnescape(match[1] ?? '').trim()

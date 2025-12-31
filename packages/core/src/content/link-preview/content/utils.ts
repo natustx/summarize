@@ -1,3 +1,4 @@
+import { formatTranscriptSegments } from '../../transcript/timestamps.js'
 import type { CacheMode, TranscriptDiagnostics } from '../types.js'
 import { applyContentBudget, normalizeCandidate, normalizeForPrompt } from './cleaner.js'
 import {
@@ -10,7 +11,6 @@ import {
   type FirecrawlMode,
   type TranscriptResolution,
 } from './types.js'
-import { formatTranscriptSegments } from '../../transcript/timestamps.js'
 
 const WWW_PREFIX_PATTERN = /^www\./i
 const TRANSCRIPT_LINE_SPLIT_PATTERN = /\r?\n/

@@ -1,3 +1,4 @@
+import type { AssistantMessage, Message } from '@mariozechner/pi-ai'
 import { shouldPreferUrlMode } from '@steipete/summarize-core/content/url'
 import { defineBackground } from 'wxt/utils/define-background'
 import { parseSseEvent } from '../../../../src/shared/sse-events.js'
@@ -6,7 +7,6 @@ import { buildDaemonRequestBody, buildSummarizeRequestBody } from '../lib/daemon
 import { createDaemonRecovery, isDaemonUnreachableError } from '../lib/daemon-recovery'
 import { loadSettings, patchSettings } from '../lib/settings'
 import { parseSseStream } from '../lib/sse'
-import type { AssistantMessage, Message } from '@mariozechner/pi-ai'
 
 type PanelToBg =
   | { type: 'panel:ready' }
@@ -1271,7 +1271,8 @@ export default defineBackground(() => {
               }
             }
             if (!res.ok || !json?.ok || !json.assistant) {
-              const isMissingAgent = res.status === 404 || rawText.trim().toLowerCase() === 'not found'
+              const isMissingAgent =
+                res.status === 404 || rawText.trim().toLowerCase() === 'not found'
               const error =
                 json?.error ??
                 (isMissingAgent

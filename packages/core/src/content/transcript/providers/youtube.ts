@@ -139,7 +139,7 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(manualTranscript.text),
         source: 'captionTracks',
-        segments: options.transcriptTimestamps ? manualTranscript.segments ?? null : null,
+        segments: options.transcriptTimestamps ? (manualTranscript.segments ?? null) : null,
         metadata: { provider: 'captionTracks', manualOnly: true, ...(durationMetadata ?? {}) },
         attemptedProviders,
       }
@@ -164,7 +164,7 @@ export const fetchTranscript = async (
         return {
           text: normalizeTranscriptText(transcript.text),
           source: 'youtubei',
-          segments: options.transcriptTimestamps ? transcript.segments ?? null : null,
+          segments: options.transcriptTimestamps ? (transcript.segments ?? null) : null,
           metadata: { provider: 'youtubei', ...(durationMetadata ?? {}) },
           attemptedProviders,
         }
@@ -186,7 +186,7 @@ export const fetchTranscript = async (
       return {
         text: normalizeTranscriptText(captionTranscript.text),
         source: 'captionTracks',
-        segments: options.transcriptTimestamps ? captionTranscript.segments ?? null : null,
+        segments: options.transcriptTimestamps ? (captionTranscript.segments ?? null) : null,
         metadata: { provider: 'captionTracks', ...(durationMetadata ?? {}) },
         attemptedProviders,
       }

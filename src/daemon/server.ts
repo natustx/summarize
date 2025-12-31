@@ -10,8 +10,8 @@ import { formatModelLabelForDisplay } from '../run/finish-line.js'
 import { resolveRunOverrides } from '../run/run-settings.js'
 import { encodeSseEvent, type SseEvent } from '../shared/sse-events.js'
 import { resolvePackageVersion } from '../version.js'
-import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import { completeAgentResponse } from './agent.js'
+import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import type { DaemonConfig } from './config.js'
 import { DAEMON_HOST, DAEMON_PORT_DEFAULT } from './constants.js'
 import { buildModelPickerOptions } from './models.js'
@@ -684,7 +684,8 @@ export async function runDaemonServer({
             pageTitle,
             pageContent,
             messages,
-            modelOverride: modelOverride && modelOverride.toLowerCase() !== 'auto' ? modelOverride : null,
+            modelOverride:
+              modelOverride && modelOverride.toLowerCase() !== 'auto' ? modelOverride : null,
             tools,
             automationEnabled,
           })

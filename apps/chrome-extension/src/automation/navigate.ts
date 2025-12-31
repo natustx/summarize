@@ -19,10 +19,16 @@ async function waitForTabComplete(tabId: number, timeoutMs = 15_000): Promise<ch
     const onUpdated = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
       if (updatedTabId !== tabId) return
       if (changeInfo.status !== 'complete') return
-      chrome.tabs.get(tabId).then((tab) => {
-        cleanup()
-        resolve(tab)
-      })
+      void chrome.tabs.get(tabId).then(
+        (tab) => {
+          cleanup()
+          resolve(tab)
+        },
+        (error) => {
+          cleanup()
+          reject(error)
+        }
+      )
     }
 
     const cleanup = () => {
