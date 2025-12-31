@@ -28,6 +28,7 @@ type UiState = {
     autoSummarize: boolean
     hoverSummaries: boolean
     chatEnabled: boolean
+    automationEnabled: boolean
     model: string
     length: string
     tokenPresent: boolean
@@ -45,6 +46,7 @@ const defaultUiState: UiState = {
     autoSummarize: true,
     hoverSummaries: false,
     chatEnabled: true,
+    automationEnabled: false,
     model: 'auto',
     length: 'xl',
     tokenPresent: true,
@@ -59,6 +61,26 @@ function buildUiState(overrides: Partial<UiState>): UiState {
     daemon: { ...defaultUiState.daemon, ...overrides.daemon },
     tab: { ...defaultUiState.tab, ...overrides.tab },
     settings: { ...defaultUiState.settings, ...overrides.settings },
+  }
+}
+
+function buildAssistant(text: string) {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    timestamp: Date.now(),
+    api: 'openai-completions',
+    provider: 'openai',
+    model: 'test',
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'stop',
   }
 }
 
@@ -753,33 +775,41 @@ test('sidepanel video selection forces transcript mode', async () => {
   }
 })
 
-test('sidepanel shows an error when chat stream ends without done', async () => {
+test('sidepanel shows an error when agent request fails', async () => {
   const harness = await launchExtension()
 
   try {
-    await mockDaemonSummarize(harness)
     await seedSettings(harness, { token: 'test-token', autoSummarize: false, chatEnabled: true })
-    const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
-    const sseBody = ['event: status', 'data: {"text":"Summarizing..."}', ''].join('\n')
+    const contentPage = await harness.context.newPage()
+    await contentPage.goto('https://example.com', { waitUntil: 'domcontentloaded' })
+    await contentPage.evaluate(() => {
+      document.body.innerHTML = `<article><p>Agent error test.</p></article>`
+    })
+    await contentPage.bringToFront()
+    await activateTabByUrl(harness, 'https://example.com')
+    await waitForActiveTabUrl(harness, 'https://example.com')
+    await injectContentScript(harness, 'content-scripts/extract.js', 'https://example.com')
 
-    await harness.context.route(
-      /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
-      async (route) => {
-        await route.fulfill({
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-          body: sseBody,
-        })
-      }
-    )
-
-    await sendBgMessage(harness, {
-      type: 'chat:start',
-      payload: { id: 'chat-1', url: 'https://example.com' },
+    await harness.context.route('http://127.0.0.1:8787/v1/agent', async (route) => {
+      await route.fulfill({
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ok: false, error: 'Boom' }),
+      })
     })
 
+    const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
+    await page.evaluate((value) => {
+      const input = document.getElementById('chatInput') as HTMLTextAreaElement | null
+      const send = document.getElementById('chatSend') as HTMLButtonElement | null
+      if (!input || !send) return
+      input.value = value
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      send.click()
+    }, 'Trigger agent error')
+
     await expect(page.locator('#error')).toBeVisible()
-    await expect(page.locator('#errorMessage')).toContainText('Stream ended unexpectedly')
+    await expect(page.locator('#errorMessage')).toContainText('Chat request failed')
     assertNoErrors(harness)
   } finally {
     await closeExtension(harness.context, harness.userDataDir)
@@ -803,47 +833,21 @@ test('sidepanel chat queue sends next message after stream completes', async () 
 
     const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
 
-    let chatRequestCount = 0
-    let eventsCalls = 0
-    let releaseFirstSse: (() => void) | null = null
+    let agentRequestCount = 0
+    let releaseFirst: (() => void) | null = null
     const firstGate = new Promise<void>((resolve) => {
-      releaseFirstSse = resolve
+      releaseFirst = resolve
     })
 
-    await harness.context.route('http://127.0.0.1:8787/v1/chat', async (route) => {
-      chatRequestCount += 1
+    await harness.context.route('http://127.0.0.1:8787/v1/agent', async (route) => {
+      agentRequestCount += 1
+      if (agentRequestCount === 1) await firstGate
       await route.fulfill({
         status: 200,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ok: true, id: `chat-${chatRequestCount}` }),
+        body: JSON.stringify({ ok: true, assistant: buildAssistant(`Reply ${agentRequestCount}`) }),
       })
     })
-
-    await harness.context.route(
-      /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
-      async (route) => {
-        eventsCalls += 1
-        const match = route
-          .request()
-          .url()
-          .match(/\/v1\/summarize\/([^/]+)\/events/)
-        const id = match?.[1] ?? 'chat-unknown'
-        if (id === 'chat-1') await firstGate
-        const body = [
-          'event: chunk',
-          `data: {"text":"Reply for ${id}"}`,
-          '',
-          'event: done',
-          'data: {}',
-          '',
-        ].join('\n')
-        await route.fulfill({
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-          body,
-        })
-      }
-    )
 
     const sendChat = async (text: string) => {
       await page.evaluate((value) => {
@@ -860,14 +864,13 @@ test('sidepanel chat queue sends next message after stream completes', async () 
     await activateTabByUrl(harness, 'https://example.com')
     await waitForActiveTabUrl(harness, 'https://example.com')
     await sendChat('First question')
-    await expect.poll(() => chatRequestCount).toBe(1)
-    await expect.poll(() => eventsCalls).toBe(1)
+    await expect.poll(() => agentRequestCount).toBe(1)
     await sendChat('Second question')
-    await expect.poll(() => chatRequestCount, { timeout: 1_000 }).toBe(1)
+    await expect.poll(() => agentRequestCount, { timeout: 1_000 }).toBe(1)
 
-    releaseFirstSse?.()
+    releaseFirst?.()
 
-    await expect.poll(() => chatRequestCount).toBe(2)
+    await expect.poll(() => agentRequestCount).toBe(2)
     await expect(page.locator('#chatMessages')).toContainText('Second question')
 
     assertNoErrors(harness)
@@ -893,45 +896,21 @@ test('sidepanel chat queue drains messages after stream completes', async () => 
 
     const page = await openExtensionPage(harness, 'sidepanel.html', '#title')
 
-    let chatRequestCount = 0
-    let releaseFirstSse: (() => void) | null = null
+    let agentRequestCount = 0
+    let releaseFirst: (() => void) | null = null
     const firstGate = new Promise<void>((resolve) => {
-      releaseFirstSse = resolve
+      releaseFirst = resolve
     })
 
-    await harness.context.route('http://127.0.0.1:8787/v1/chat', async (route) => {
-      chatRequestCount += 1
+    await harness.context.route('http://127.0.0.1:8787/v1/agent', async (route) => {
+      agentRequestCount += 1
+      if (agentRequestCount === 1) await firstGate
       await route.fulfill({
         status: 200,
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ok: true, id: `chat-${chatRequestCount}` }),
+        body: JSON.stringify({ ok: true, assistant: buildAssistant(`Reply ${agentRequestCount}`) }),
       })
     })
-
-    await harness.context.route(
-      /http:\/\/127\.0\.0\.1:8787\/v1\/summarize\/[^/]+\/events/,
-      async (route) => {
-        const match = route
-          .request()
-          .url()
-          .match(/\/v1\/summarize\/([^/]+)\/events/)
-        const id = match?.[1] ?? 'chat-unknown'
-        if (id === 'chat-1') await firstGate
-        const body = [
-          'event: chunk',
-          `data: {"text":"Reply for ${id}"}`,
-          '',
-          'event: done',
-          'data: {}',
-          '',
-        ].join('\n')
-        await route.fulfill({
-          status: 200,
-          headers: { 'content-type': 'text/event-stream' },
-          body,
-        })
-      }
-    )
 
     const sendChat = async (text: string) => {
       await page.evaluate((value) => {
@@ -948,15 +927,15 @@ test('sidepanel chat queue drains messages after stream completes', async () => 
     await activateTabByUrl(harness, 'https://example.com')
     await waitForActiveTabUrl(harness, 'https://example.com')
     await sendChat('First question')
-    await expect.poll(() => chatRequestCount).toBe(1)
+    await expect.poll(() => agentRequestCount).toBe(1)
     await sendChat('Second question')
     await sendChat('Third question')
 
-    await expect.poll(() => chatRequestCount, { timeout: 1_000 }).toBe(1)
+    await expect.poll(() => agentRequestCount, { timeout: 1_000 }).toBe(1)
 
-    releaseFirstSse?.()
+    releaseFirst?.()
 
-    await expect.poll(() => chatRequestCount).toBe(3)
+    await expect.poll(() => agentRequestCount).toBe(3)
     await expect(page.locator('#chatMessages')).toContainText('Second question')
     await expect(page.locator('#chatMessages')).toContainText('Third question')
 

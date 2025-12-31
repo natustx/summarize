@@ -19,7 +19,10 @@ function replaceAll(value: string, from: string, to: string): string {
   return value.split(from).join(to)
 }
 
-function applyUpdates(skill: Skill, updates: Record<string, { old_string: string; new_string: string }>) {
+function applyUpdates(
+  skill: Skill,
+  updates: Record<string, { old_string: string; new_string: string }>
+) {
   const next = { ...skill }
   for (const [field, patch] of Object.entries(updates)) {
     if (!patch) continue

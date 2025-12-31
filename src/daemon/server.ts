@@ -12,7 +12,6 @@ import { encodeSseEvent, type SseEvent } from '../shared/sse-events.js'
 import { resolvePackageVersion } from '../version.js'
 import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import { completeAgentResponse } from './agent.js'
-import { streamChatResponse } from './chat.js'
 import type { DaemonConfig } from './config.js'
 import { DAEMON_HOST, DAEMON_PORT_DEFAULT } from './constants.js'
 import { buildModelPickerOptions } from './models.js'
@@ -689,67 +688,6 @@ export async function runDaemonServer({
           console.error('[summarize-daemon] agent failed', error)
           json(res, 500, { ok: false, error: message }, cors)
         }
-        return
-      }
-
-      if (req.method === 'POST' && pathname === '/v1/chat') {
-        await refreshCacheStoreIfMissing({ cacheState, transcriptNamespace: 'yt:auto' })
-        let body: unknown
-        try {
-          body = await readJsonBody(req, 2_000_000)
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          json(res, 400, { ok: false, error: message }, cors)
-          return
-        }
-        if (!body || typeof body !== 'object') {
-          json(res, 400, { ok: false, error: 'invalid json' }, cors)
-          return
-        }
-
-        const obj = body as Record<string, unknown>
-        const pageUrl = typeof obj.url === 'string' ? obj.url.trim() : ''
-        const pageTitle = typeof obj.title === 'string' ? obj.title.trim() : null
-        const pageContent = typeof obj.pageContent === 'string' ? obj.pageContent : ''
-        const messages = Array.isArray(obj.messages) ? obj.messages : []
-        const modelOverride = typeof obj.model === 'string' ? obj.model.trim() : null
-
-        if (!pageUrl) {
-          json(res, 400, { ok: false, error: 'missing url' }, cors)
-          return
-        }
-
-        const session = createSession()
-        sessions.set(session.id, session)
-
-        json(res, 200, { ok: true, id: session.id }, cors)
-
-        void (async () => {
-          try {
-            await streamChatResponse({
-              env,
-              fetchImpl,
-              session,
-              pageUrl,
-              pageTitle,
-              pageContent,
-              messages: messages as Array<{ role: 'user' | 'assistant'; content: string }>,
-              modelOverride:
-                modelOverride && modelOverride.toLowerCase() !== 'auto' ? modelOverride : null,
-              pushToSession: (evt) => pushToSession(session, evt),
-              emitMeta: (patch) => emitMeta(session, patch),
-            })
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            pushToSession(session, { event: 'error', data: { message } })
-            console.error('[summarize-daemon] chat failed', error)
-          } finally {
-            setTimeout(() => {
-              sessions.delete(session.id)
-              endSession(session)
-            }, 60_000).unref()
-          }
-        })()
         return
       }
 

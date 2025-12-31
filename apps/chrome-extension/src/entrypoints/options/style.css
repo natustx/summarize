@@ -476,6 +476,100 @@ form {
   color: var(--text);
 }
 
+.skillsActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.skillsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skillsEmpty {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.skillCard,
+.skillEditor,
+.skillsConflicts {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.skillHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.skillName {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.skillDomains {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.skillDescription {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.skillActions,
+.skillsConflictActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.skillEditor {
+  display: grid;
+  gap: 10px;
+}
+
+.skillEditor textarea {
+  font-family: var(--mono);
+  font-size: 12px;
+  min-height: 90px;
+}
+
+.skillsConflictsList {
+  display: grid;
+  gap: 8px;
+}
+
+.skillsConflictItem {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  background: var(--bg1);
+}
+
+.skillsConflictItem input {
+  margin-top: 3px;
+}
+
 .uiGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

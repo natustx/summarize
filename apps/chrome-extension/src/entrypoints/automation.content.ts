@@ -13,6 +13,7 @@ export type ElementInfo = {
 declare global {
   interface Window {
     __summarizeElementPicker?: boolean
+    __summarizeReplOverlay?: boolean
   }
 }
 
@@ -23,9 +24,7 @@ function generateSelector(element: Element): string {
   while (current && current !== document.body) {
     let selector = current.tagName.toLowerCase()
     if (current.className && typeof current.className === 'string') {
-      const classes = current.className
-        .split(/\s+/)
-        .filter((c) => c && !c.startsWith('summarize-'))
+      const classes = current.className.split(/\s+/).filter((c) => c && !c.startsWith('summarize-'))
       if (classes.length > 0) {
         selector += `.${classes.map((c) => CSS.escape(c)).join('.')}`
       }
@@ -228,6 +227,89 @@ async function createElementPicker(message?: string): Promise<ElementInfo> {
   })
 }
 
+function showReplOverlay(message?: string) {
+  if (window.__summarizeReplOverlay) return
+  window.__summarizeReplOverlay = true
+
+  const overlay = document.createElement('div')
+  overlay.id = '__summarize_repl_overlay__'
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    pointer-events: none;
+  `
+
+  const card = document.createElement('div')
+  card.style.cssText = `
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111827;
+    color: white;
+    padding: 10px 16px;
+    border-radius: 999px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: auto;
+  `
+
+  const text = document.createElement('span')
+  text.textContent = message || 'Running automation…'
+  card.appendChild(text)
+
+  const abortBtn = document.createElement('button')
+  abortBtn.textContent = 'Abort (Esc)'
+  abortBtn.style.cssText = `
+    background: #1f2937;
+    border: none;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 12px;
+  `
+  card.appendChild(abortBtn)
+
+  overlay.appendChild(card)
+  document.body.appendChild(overlay)
+
+  const requestAbort = () => {
+    chrome.runtime.sendMessage({ type: 'automation:abort-agent' })
+    hideReplOverlay()
+  }
+
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      requestAbort()
+    }
+  }
+
+  abortBtn.addEventListener('click', requestAbort)
+  window.addEventListener('keydown', onKey, true)
+
+  ;(overlay as HTMLElement).dataset.cleanup = 'true'
+  ;(overlay as unknown as { __cleanup?: () => void }).__cleanup = () => {
+    window.removeEventListener('keydown', onKey, true)
+    abortBtn.removeEventListener('click', requestAbort)
+  }
+}
+
+function hideReplOverlay() {
+  const overlay = document.getElementById('__summarize_repl_overlay__')
+  if (overlay) {
+    ;(overlay as unknown as { __cleanup?: () => void }).__cleanup?.()
+    overlay.remove()
+  }
+  window.__summarizeReplOverlay = false
+}
+
 function handleNativeInputBridge() {
   window.addEventListener('message', (event) => {
     if (event.source !== window) return
@@ -259,21 +341,31 @@ export default defineContentScript({
 
     chrome.runtime.onMessage.addListener(
       (
-        raw: { type?: string; message?: string | null },
+        raw: { type?: string; message?: string | null; action?: string },
         _sender,
         sendResponse: (response: { ok: boolean; result?: ElementInfo; error?: string }) => void
       ) => {
-        if (raw?.type !== 'automation:pick-element') return
-        void (async () => {
-          try {
-            const result = await createElementPicker(raw.message ?? undefined)
-            sendResponse({ ok: true, result })
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            sendResponse({ ok: false, error: message })
+        if (raw?.type === 'automation:pick-element') {
+          void (async () => {
+            try {
+              const result = await createElementPicker(raw.message ?? undefined)
+              sendResponse({ ok: true, result })
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              sendResponse({ ok: false, error: message })
+            }
+          })()
+          return true
+        }
+        if (raw?.type === 'automation:repl-overlay') {
+          if (raw.action === 'show') {
+            showReplOverlay(raw.message ?? undefined)
+          } else if (raw.action === 'hide') {
+            hideReplOverlay()
           }
-        })()
-        return true
+          sendResponse({ ok: true })
+          return
+        }
       }
     )
   },

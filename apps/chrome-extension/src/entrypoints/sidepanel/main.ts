@@ -11,6 +11,7 @@ import { applyTheme } from '../../lib/theme'
 import { generateToken } from '../../lib/token'
 import { mountCheckbox } from '../../ui/zag-checkbox'
 import { executeToolCall, getAutomationToolNames } from '../../automation/tools'
+import { listSkills } from '../../automation/skills-store'
 import { ChatController } from './chat-controller'
 import { type ChatHistoryLimits, compactChatHistory } from './chat-state'
 import { createHeaderController } from './header-controller'
@@ -186,6 +187,8 @@ let activeTabUrl: string | null = null
 let lastStreamError: string | null = null
 let lastChatError: string | null = null
 let lastAction: 'summarize' | 'chat' | null = null
+let abortAgentRequested = false
+let lastNavigationMessageUrl: string | null = null
 let inputMode: 'page' | 'video' = 'page'
 let inputModeOverride: 'page' | 'video' | null = null
 let mediaAvailable = false
@@ -206,6 +209,33 @@ const pendingAgentRequests = new Map<
   string,
   { resolve: (response: AgentResponse) => void; reject: (error: Error) => void }
 >()
+
+function abortPendingAgentRequests(reason: string) {
+  for (const pending of pendingAgentRequests.values()) {
+    pending.reject(new Error(reason))
+  }
+  pendingAgentRequests.clear()
+}
+
+async function hideReplOverlayForActiveTab() {
+  if (!activeTabId) return
+  try {
+    await chrome.tabs.sendMessage(activeTabId, {
+      type: 'automation:repl-overlay',
+      action: 'hide',
+      message: null,
+    })
+  } catch {
+    // ignore
+  }
+}
+
+function requestAgentAbort(reason: string) {
+  abortAgentRequested = true
+  abortPendingAgentRequests(reason)
+  headerController.setStatus(reason)
+  void hideReplOverlayForActiveTab()
+}
 
 function wrapMessage(message: Message): ChatMessage {
   return { ...message, id: crypto.randomUUID() }
@@ -361,6 +391,16 @@ const headerController = createHeaderController({
 headerController.updateHeaderOffset()
 window.addEventListener('resize', headerController.updateHeaderOffset)
 
+chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+  if (!raw || typeof raw !== 'object') return
+  const type = (raw as { type?: string }).type
+  if (type === 'automation:abort-agent') {
+    requestAgentAbort('Agent aborted')
+    sendResponse?.({ ok: true })
+    return true
+  }
+})
+
 let autoScrollLocked = true
 
 const isNearBottom = () => {
@@ -418,6 +458,34 @@ function urlsMatch(a: string, b: string) {
     return next === '/' || next === '?' || next === '&'
   }
   return boundaryMatch(left, right) || boundaryMatch(right, left)
+}
+
+async function appendNavigationMessage(url: string, title: string | null) {
+  if (!url || lastNavigationMessageUrl === url) return
+  lastNavigationMessageUrl = url
+
+  const skills = await listSkills(url)
+  const skillsText =
+    skills.length === 0
+      ? 'Skills: none'
+      : `Skills:\n${skills.map((skill) => `- ${skill.name}: ${skill.shortDescription}`).join('\n')}`
+
+  const text = ['Navigation changed', `Title: ${title || url}`, `URL: ${url}`, skillsText].join(
+    '\n'
+  )
+
+  const message: ToolResultMessage = {
+    role: 'toolResult',
+    toolCallId: crypto.randomUUID(),
+    toolName: 'navigation',
+    content: [{ type: 'text', text }],
+    isError: false,
+    timestamp: Date.now(),
+  }
+
+  chatController.addMessage(wrapMessage(message))
+  scrollToBottom(true)
+  void persistChatHistory()
 }
 
 function canSyncTabUrl(url: string | null | undefined): url is string {
@@ -1300,7 +1368,6 @@ const streamController = createStreamController({
   },
 })
 
-
 async function ensureToken(): Promise<string> {
   const settings = await loadSettings()
   if (settings.token.trim()) return settings.token.trim()
@@ -1585,15 +1652,23 @@ function updateControls(state: UiState) {
   const nextMediaAvailable = Boolean(state.media && (state.media.hasVideo || state.media.hasAudio))
   const nextVideoLabel = state.media?.hasAudio && !state.media.hasVideo ? 'Audio' : 'Video'
 
-  if (tabChanged || urlChanged) {
-    const previousTabId = activeTabId
+  if (tabChanged) {
     activeTabId = nextTabId
     activeTabUrl = nextTabUrl
+    if (panelState.chatStreaming) {
+      requestAgentAbort('Tab changed')
+    }
     resetChatState()
     inputMode = 'page'
     inputModeOverride = null
-    if (!tabChanged && urlChanged) {
-      void clearChatHistoryForTab(previousTabId)
+  } else if (urlChanged) {
+    activeTabUrl = nextTabUrl
+    if (
+      chatEnabledValue &&
+      nextTabUrl &&
+      (panelState.chatStreaming || chatController.getMessages().length > 0)
+    ) {
+      void appendNavigationMessage(nextTabUrl, state.tab.title ?? null)
     }
   }
 
@@ -1840,6 +1915,8 @@ function resetChatState() {
   clearQueuedMessages()
   chatJumpBtn.classList.remove('isVisible')
   pendingAgentRequests.clear()
+  abortAgentRequested = false
+  lastNavigationMessageUrl = null
 }
 
 function finishStreamingMessage() {
@@ -1860,13 +1937,21 @@ async function runAgentLoop() {
   }
 
   while (true) {
+    if (abortAgentRequested) return
     const messages = chatController.buildRequestMessages() as Message[]
-    const response = await requestAgent(messages, tools, panelState.summaryMarkdown)
+    let response: AgentResponse
+    try {
+      response = await requestAgent(messages, tools, panelState.summaryMarkdown)
+    } catch (error) {
+      if (abortAgentRequested) return
+      throw error
+    }
     if (!response.ok || !response.assistant) {
       throw new Error(response.error || 'Agent failed')
     }
 
     const assistant = response.assistant
+    if (abortAgentRequested) return
     chatController.addMessage(wrapMessage(assistant))
     scrollToBottom(true)
 
@@ -1874,6 +1959,7 @@ async function runAgentLoop() {
     if (toolCalls.length === 0) break
 
     for (const call of toolCalls) {
+      if (abortAgentRequested) return
       const result = (await executeToolCall(call)) as ToolResultMessage
       chatController.addMessage(wrapMessage(result))
       scrollToBottom(true)
@@ -1886,10 +1972,9 @@ function startChatMessage(text: string) {
   if (!input || !chatEnabledValue) return
 
   clearError()
+  abortAgentRequested = false
 
-  chatController.addMessage(
-    wrapMessage({ role: 'user', content: input, timestamp: Date.now() })
-  )
+  chatController.addMessage(wrapMessage({ role: 'user', content: input, timestamp: Date.now() }))
 
   panelState.chatStreaming = true
   chatSendBtn.disabled = true
@@ -1927,6 +2012,7 @@ function retryChat() {
   if (!chatController.hasUserMessages()) return
 
   clearError()
+  abortAgentRequested = false
   panelState.chatStreaming = true
   chatSendBtn.disabled = true
   setActiveMetricsMode('chat')

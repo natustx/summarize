@@ -234,6 +234,8 @@ If permission is missing, the call fails and the tool reports the error.
 - Regular summarize flows remain unchanged.
 - Tool results are treated as **data**, not instructions. The system prompt still asks the assistant to repeat important tool-derived info in plain text.
 - Tool results are currently rendered in the chat UI for debugging; they may be hidden in the future.
+- When the active tab URL changes during a conversation, the panel appends a **navigation tool result** with the new URL, title, and matching skills. This keeps the agent aware of user-driven navigation.
+- REPL executions that call `browserjs()` show a small overlay with an **Abort** action; aborting stops the current agent loop (best-effort).
 
 ## Where Things Live
 

@@ -38,13 +38,57 @@ function validateReplCode(code: string): void {
   }
 }
 
+async function ensureAutomationContentScript(tabId: number): Promise<void> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content-scripts/automation.js'],
+    })
+  } catch {
+    // ignore
+  }
+}
+
+async function sendReplOverlay(
+  tabId: number,
+  action: 'show' | 'hide',
+  message?: string
+): Promise<void> {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'automation:repl-overlay',
+      action,
+      message: message ?? null,
+    })
+    return
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    const noReceiver =
+      msg.includes('Receiving end does not exist') || msg.includes('Could not establish connection')
+    if (!noReceiver) return
+  }
+
+  await ensureAutomationContentScript(tabId)
+  await new Promise((resolve) => setTimeout(resolve, 120))
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'automation:repl-overlay',
+      action,
+      message: message ?? null,
+    })
+  } catch {
+    // ignore
+  }
+}
+
 function createConsoleCapture() {
   const lines: string[] = []
   const original = { ...console }
   const format = (args: unknown[]) =>
     args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ')
 
-  const wrap = (method: keyof Console) =>
+  const wrap =
+    (method: keyof Console) =>
     (...args: unknown[]) => {
       lines.push(format(args))
       original[method](...args)
@@ -96,9 +140,7 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
       const logs: string[] = []
       const capture = (...args: unknown[]) => {
         logs.push(
-          args
-            .map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg)))
-            .join(' ')
+          args.map((arg) => (typeof arg === 'string' ? arg : JSON.stringify(arg))).join(' ')
         )
       }
       const originalLog = console.log
@@ -107,7 +149,10 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
         originalLog(...args)
       }
 
-      const indirectEval: typeof eval = eval
+      const runSnippet = (snippet: string) => {
+        const fn = new Function(snippet)
+        fn()
+      }
 
       const postNativeInput = (payload: Record<string, unknown>) => {
         if (!data.nativeInputEnabled) {
@@ -117,7 +162,12 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
           const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
           const handler = (event: MessageEvent) => {
             if (event.source !== window) return
-            const msg = event.data as { source?: string; requestId?: string; ok?: boolean; error?: string }
+            const msg = event.data as {
+              source?: string
+              requestId?: string
+              ok?: boolean
+              error?: string
+            }
             if (msg?.source !== 'summarize-native-input' || msg.requestId !== requestId) return
             window.removeEventListener('message', handler)
             if (msg.ok) resolve(true)
@@ -146,12 +196,13 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
             })
           }
 
-        ;(window as unknown as { nativeType?: (selector: string, text: string) => Promise<void> }).nativeType =
-          async (selector: string, text: string) => {
-            const el = resolveElement(selector)
-            el.focus()
-            await postNativeInput({ action: 'type', text })
-          }
+        ;(
+          window as unknown as { nativeType?: (selector: string, text: string) => Promise<void> }
+        ).nativeType = async (selector: string, text: string) => {
+          const el = resolveElement(selector)
+          el.focus()
+          await postNativeInput({ action: 'type', text })
+        }
 
         ;(window as unknown as { nativePress?: (key: string) => Promise<void> }).nativePress =
           async (key: string) => {
@@ -172,10 +223,10 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
       const execute = async () => {
         for (const lib of data.libraries) {
           if (!lib) continue
-          indirectEval(lib)
+          runSnippet(lib)
         }
         attachNativeHelpers()
-        const fn = indirectEval(`(${data.fnSource})`)
+        const fn = new Function(`return (${data.fnSource})`)()
         const value = await fn()
         return { ok: true as const, value, logs }
       }
@@ -200,6 +251,16 @@ async function runBrowserJs(fnSource: string): Promise<BrowserJsResult> {
 export async function executeReplTool(args: ReplArgs): Promise<ReplResult> {
   if (!args.code?.trim()) throw new Error('Missing code')
   validateReplCode(args.code)
+
+  const usesBrowserJs = args.code.includes('browserjs(')
+  let overlayTabId: number | null = null
+  if (usesBrowserJs) {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    if (tab?.id) {
+      overlayTabId = tab.id
+      await sendReplOverlay(overlayTabId, 'show', args.title || 'Running automation')
+    }
+  }
 
   const capture = createConsoleCapture()
   capture.attach()
@@ -232,6 +293,9 @@ export async function executeReplTool(args: ReplArgs): Promise<ReplResult> {
     capture.lines.push(`Error: ${message}`)
   } finally {
     capture.restore()
+    if (overlayTabId) {
+      await sendReplOverlay(overlayTabId, 'hide')
+    }
   }
 
   return { output: capture.lines.join('\n').trim() || 'Code executed successfully (no output)' }

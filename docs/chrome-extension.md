@@ -162,15 +162,17 @@ Problem: daemon must be secured; extension must discover and pair with it.
     - `text?: string` (required for `mode: "page"`; optional for `auto`)
     - `truncated?: boolean` (optional; indicates extracted `text` was shortened)
   - 200 JSON: `{ ok: true, id }`
-- `POST /v1/chat`
+- `POST /v1/agent`
   - Headers: `Authorization: Bearer <token>`
   - Body:
     - `url: string` (required)
     - `title?: string | null`
-    - `pageContent: string` (extracted page content / transcript)
-    - `messages: Array<{ role: "user" | "assistant"; content: string }>`
-    - `model?: string` (same as `/v1/summarize`, optional)
-  - 200 JSON: `{ ok: true, id }` (stream via `/v1/summarize/:id/events`)
+    - `pageContent: string`
+    - `messages: Array<Message>` (pi-ai format)
+    - `model?: string`
+    - `tools?: string[]`
+    - `automationEnabled?: boolean`
+  - 200 JSON: `{ ok: true, assistant }`
 - `GET /v1/summarize/:id/events` (SSE)
   - `event: chunk` `data: { text }`
   - `event: meta` `data: { model }`

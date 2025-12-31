@@ -39,6 +39,22 @@
         </section>
 
         <section class="section">
+          <h2>Automation Skills</h2>
+          <div class="hint">Manage reusable JavaScript libraries for domain-specific automation.</div>
+          <div class="skillsActions">
+            <button id="skillsExport" type="button" class="miniButton">Export skills</button>
+            <button id="skillsImport" type="button" class="miniButton">Import skills</button>
+          </div>
+          <label>
+            <span>Search</span>
+            <input id="skillsSearch" type="text" placeholder="Search by name, domain, or description" />
+          </label>
+          <div id="skillsImportConflicts" class="skillsConflicts" hidden></div>
+          <div id="skillsList" class="skillsList"></div>
+          <div id="skillsEmpty" class="skillsEmpty" hidden>No skills created yet.</div>
+        </section>
+
+        <section class="section">
           <h2>Token setup</h2>
           <label>
             <span>Token</span>

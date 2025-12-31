@@ -2,7 +2,7 @@ import type { ToolCall, ToolResultMessage } from '@mariozechner/pi-ai'
 import { executeAskUserWhichElementTool } from './ask-user-which-element'
 import { executeNavigateTool } from './navigate'
 import { executeReplTool } from './repl'
-import { type SkillToolArgs, executeSkillTool } from './skills'
+import { executeSkillTool, type SkillToolArgs } from './skills'
 
 const TOOL_NAMES = ['navigate', 'repl', 'ask_user_which_element', 'skill', 'debugger'] as const
 
@@ -47,7 +47,9 @@ async function executeDebuggerTool(args: { action?: string; code?: string }) {
 
   const hasPermission = await chrome.permissions.contains({ permissions: ['debugger'] })
   if (!hasPermission) {
-    throw new Error('Debugger permission not granted. Enable it in Options → Automation permissions.')
+    throw new Error(
+      'Debugger permission not granted. Enable it in Options → Automation permissions.'
+    )
   }
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -69,11 +71,7 @@ async function executeDebuggerTool(args: { action?: string; code?: string }) {
     })
     const value = result?.result?.value ?? result?.result ?? null
     const text =
-      value == null
-        ? 'null'
-        : typeof value === 'string'
-          ? value
-          : JSON.stringify(value, null, 2)
+      value == null ? 'null' : typeof value === 'string' ? value : JSON.stringify(value, null, 2)
     return { text, details: result }
   } finally {
     try {
@@ -87,7 +85,9 @@ async function executeDebuggerTool(args: { action?: string; code?: string }) {
 export async function executeToolCall(toolCall: ToolCall): Promise<ToolResultMessage> {
   try {
     if (toolCall.name === 'navigate') {
-      const result = await executeNavigateTool(toolCall.arguments as { url: string; newTab?: boolean })
+      const result = await executeNavigateTool(
+        toolCall.arguments as { url: string; newTab?: boolean }
+      )
       return buildToolResultMessage({
         toolCallId: toolCall.id,
         toolName: toolCall.name,
@@ -121,10 +121,7 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResultMes
     }
 
     if (toolCall.name === 'skill') {
-      const result = await executeSkillTool(
-        toolCall.arguments as SkillToolArgs,
-        getActiveTabUrl
-      )
+      const result = await executeSkillTool(toolCall.arguments as SkillToolArgs, getActiveTabUrl)
       return buildToolResultMessage({
         toolCallId: toolCall.id,
         toolName: toolCall.name,
@@ -135,7 +132,9 @@ export async function executeToolCall(toolCall: ToolCall): Promise<ToolResultMes
     }
 
     if (toolCall.name === 'debugger') {
-      const result = await executeDebuggerTool(toolCall.arguments as { action?: string; code?: string })
+      const result = await executeDebuggerTool(
+        toolCall.arguments as { action?: string; code?: string }
+      )
       return buildToolResultMessage({
         toolCallId: toolCall.id,
         toolName: toolCall.name,
