@@ -141,6 +141,7 @@ export async function streamSummaryForVisiblePage({
   promptOverride,
   lengthRaw,
   languageRaw,
+  format,
   sink,
   cache,
   overrides,
@@ -152,6 +153,7 @@ export async function streamSummaryForVisiblePage({
   promptOverride: string | null
   lengthRaw: unknown
   languageRaw: unknown
+  format?: 'text' | 'markdown'
   sink: StreamSink
   cache: CacheState
   overrides: RunOverrides
@@ -171,6 +173,7 @@ export async function streamSummaryForVisiblePage({
     lengthRaw,
     languageRaw,
     maxExtractCharacters: null,
+    format,
     overrides,
     hooks: {
       onModelChosen: (modelId) => {
@@ -289,6 +292,7 @@ export async function streamSummaryForUrl({
   promptOverride,
   lengthRaw,
   languageRaw,
+  format,
   sink,
   cache,
   overrides,
@@ -301,6 +305,7 @@ export async function streamSummaryForUrl({
   promptOverride: string | null
   lengthRaw: unknown
   languageRaw: unknown
+  format?: 'text' | 'markdown'
   sink: StreamSink
   cache: CacheState
   overrides: RunOverrides
@@ -325,6 +330,7 @@ export async function streamSummaryForUrl({
     languageRaw,
     maxExtractCharacters:
       input.maxCharacters && input.maxCharacters > 0 ? input.maxCharacters : null,
+    format,
     overrides,
     hooks: {
       onModelChosen: (modelId) => {
@@ -388,12 +394,14 @@ export async function extractContentForUrl({
   input,
   cache,
   overrides,
+  format,
 }: {
   env: Record<string, string | undefined>
   fetchImpl: typeof fetch
   input: UrlModeInput
   cache: CacheState
   overrides: RunOverrides
+  format?: 'text' | 'markdown'
 }): Promise<ExtractedLinkContent> {
   const extractedRef = { value: null as ExtractedLinkContent | null }
 
@@ -407,6 +415,7 @@ export async function extractContentForUrl({
     languageRaw: '',
     maxExtractCharacters:
       input.maxCharacters && input.maxCharacters > 0 ? input.maxCharacters : null,
+    format,
     overrides,
     extractOnly: true,
     hooks: {

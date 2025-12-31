@@ -45,6 +45,7 @@ export type DaemonUrlFlowContextArgs = {
   lengthRaw: unknown
   languageRaw: unknown
   maxExtractCharacters: number | null
+  format?: 'text' | 'markdown'
   overrides?: RunOverrides | null
   extractOnly?: boolean
   hooks?: {
@@ -67,6 +68,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
     lengthRaw,
     languageRaw,
     maxExtractCharacters,
+    format,
     overrides,
     extractOnly,
     hooks,
@@ -91,6 +93,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
     maxOutputTokensArg: null,
   }
   const videoModeOverride = resolvedOverrides.videoMode
+  const resolvedFormat = format === 'markdown' ? 'markdown' : 'text'
 
   const {
     config,
@@ -160,7 +163,8 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
   const timeoutMs = resolvedOverrides.timeoutMs ?? 120_000
   const retries = resolvedOverrides.retries ?? 1
   const firecrawlMode = resolvedOverrides.firecrawlMode ?? 'off'
-  const markdownMode = resolvedOverrides.markdownMode ?? 'readability'
+  const markdownMode =
+    resolvedOverrides.markdownMode ?? (resolvedFormat === 'markdown' ? 'readability' : 'off')
   const preprocessMode = resolvedOverrides.preprocessMode ?? 'auto'
   const youtubeMode = resolvedOverrides.youtubeMode ?? 'auto'
 
@@ -291,7 +295,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
       timeoutMs,
       maxExtractCharacters,
       retries,
-      format: 'text',
+      format: resolvedFormat,
       markdownMode,
       preprocessMode,
       youtubeMode,

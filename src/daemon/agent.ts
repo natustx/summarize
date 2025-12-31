@@ -19,6 +19,7 @@ Professional, concise, pragmatic. Use "I" for your actions. Match the user's ton
 - repl: run JavaScript in a sandbox + browserjs() for page context
 - ask_user_which_element: user picks a DOM element visually
 - skill: manage domain-specific libraries injected into browserjs()
+- summarize: run Summarize on a URL (summary or extract text/markdown)
 - debugger: main-world eval (last resort; shows debugger banner)
 
 # Critical Rules
@@ -170,6 +171,62 @@ const TOOL_DEFINITIONS: Record<string, Tool> = {
         },
       },
       required: ['action'],
+    } as Tool['parameters'],
+  },
+  summarize: {
+    name: 'summarize',
+    description:
+      'Run Summarize on a URL (summary or extract-only). Use extractOnly + format=markdown to return Markdown.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        url: { type: 'string', description: 'URL to summarize (defaults to active tab)' },
+        extractOnly: {
+          type: 'boolean',
+          description: 'Extract content only (no summary)',
+          default: false,
+        },
+        format: {
+          type: 'string',
+          enum: ['text', 'markdown'],
+          description: 'Extraction format when extractOnly is true (default: text)',
+        },
+        markdownMode: {
+          type: 'string',
+          enum: ['off', 'auto', 'llm', 'readability'],
+          description: 'Markdown conversion mode (only when format=markdown)',
+        },
+        model: { type: 'string', description: 'Model override (e.g. openai/gpt-5-mini)' },
+        length: { type: 'string', description: 'Summary length (short|medium|long|xl|...)' },
+        language: { type: 'string', description: 'Output language (auto or tag)' },
+        prompt: { type: 'string', description: 'Prompt override' },
+        timeout: { type: 'string', description: 'Timeout (e.g. 30s, 2m)' },
+        maxOutputTokens: { type: 'string', description: 'Max output tokens (e.g. 2k)' },
+        noCache: { type: 'boolean', description: 'Bypass cache' },
+        firecrawl: {
+          type: 'string',
+          enum: ['off', 'auto', 'always'],
+          description: 'Firecrawl mode',
+        },
+        preprocess: {
+          type: 'string',
+          enum: ['off', 'auto', 'always'],
+          description: 'Preprocess/markitdown mode',
+        },
+        youtube: {
+          type: 'string',
+          enum: ['auto', 'web', 'yt-dlp', 'apify', 'no-auto'],
+          description: 'YouTube transcript mode',
+        },
+        videoMode: {
+          type: 'string',
+          enum: ['auto', 'transcript', 'understand'],
+          description: 'Video mode',
+        },
+        timestamps: { type: 'boolean', description: 'Include transcript timestamps' },
+        maxCharacters: { type: 'number', description: 'Max characters for extraction' },
+      },
     } as Tool['parameters'],
   },
   debugger: {

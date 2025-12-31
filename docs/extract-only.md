@@ -24,3 +24,6 @@ Deprecated alias: `--extract-only`.
   - Force it with `--markdown-mode llm`.
   - If no LLM is configured, `--markdown-mode auto` may fall back to `uvx markitdown` when available.
 - `--markdown-mode readability` uses Readability to extract article HTML before Markdown conversion.
+
+Daemon note:
+- `/v1/summarize` supports `format: "markdown"` + `markdownMode` for extract-only output (use `extractOnly: true`).

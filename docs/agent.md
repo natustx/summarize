@@ -219,6 +219,47 @@ Result:
 { "text": "...", "details": { ... } }
 ```
 
+### 6) `summarize`
+Run the Summarize pipeline against a URL (summary or extract-only).
+
+Params:
+```
+{
+  "url": "https://...",
+  "extractOnly": false,
+  "format": "text",
+  "markdownMode": "readability",
+  "model": "openai/gpt-5-mini",
+  "length": "short",
+  "language": "auto",
+  "prompt": "Optional override",
+  "timeout": "2m",
+  "maxOutputTokens": "2k",
+  "noCache": false,
+  "firecrawl": "auto",
+  "preprocess": "auto",
+  "youtube": "auto",
+  "videoMode": "auto",
+  "timestamps": false,
+  "maxCharacters": 120000
+}
+```
+
+Result (summary):
+```
+{ "output": "..." }
+```
+
+Result (extract-only):
+```
+{ "output": "...", "details": { "content": "...", "title": "...", "wordCount": 123, ... } }
+```
+
+Notes:
+- URL-only (uses daemon URL pipeline).
+- Use `extractOnly: true` + `format: "markdown"` to return extracted Markdown.
+- When `format: "markdown"`, `markdownMode` defaults to `readability`.
+
 ## Native Input Bridge (Debugger Permission)
 
 Native input events use the Chrome debugger protocol:

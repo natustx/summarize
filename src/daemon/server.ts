@@ -359,6 +359,9 @@ export async function runDaemonServer({
           typeof obj.maxCharacters === 'number' && Number.isFinite(obj.maxCharacters)
             ? obj.maxCharacters
             : null
+        const formatRaw = typeof obj.format === 'string' ? obj.format.trim().toLowerCase() : ''
+        const format: 'text' | 'markdown' =
+          formatRaw === 'markdown' || formatRaw === 'md' ? 'markdown' : 'text'
         const overrides = resolveRunOverrides({
           firecrawl: obj.firecrawl,
           markdownMode: obj.markdownMode,
@@ -392,6 +395,7 @@ export async function runDaemonServer({
               input: { url: pageUrl, title, maxCharacters },
               cache: requestCache,
               overrides,
+              format,
             })
             json(
               res,
@@ -528,6 +532,7 @@ export async function runDaemonServer({
                     promptOverride,
                     lengthRaw,
                     languageRaw,
+                    format,
                     input: { url: pageUrl, title, maxCharacters },
                     sink,
                     cache: requestCache,
@@ -547,6 +552,7 @@ export async function runDaemonServer({
                     promptOverride,
                     lengthRaw,
                     languageRaw,
+                    format,
                     input: { url: pageUrl, title, text: textContent, truncated },
                     sink,
                     cache: requestCache,
