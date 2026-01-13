@@ -75,7 +75,9 @@ export function buildLinkSummaryPrompt({
 }): string {
   const slidesText = slides?.text?.trim() ?? ''
   const contentWithSlides =
-    slidesText.length > 0 ? `${content}\n\nSlides (OCR):\n${slidesText}` : content
+    slidesText.length > 0
+      ? `${content}\n\nSlide timeline (transcript excerpts):\n${slidesText}`
+      : content
   const contentCharacters = contentWithSlides.length
   const contextLines: string[] = [`Source URL: ${url}`]
 
@@ -155,9 +157,10 @@ export function buildLinkSummaryPrompt({
       : 'You are not given any quotes from people who shared this link. Do not fabricate reactions or add a "What sharers are saying" subsection.'
 
   const shareBlock = shares.length > 0 ? `Tweets from sharers:\n${shareLines.join('\n')}` : ''
-  const timestampInstruction = hasTranscriptTimestamps
-    ? 'Add a "Key moments" section with 3-6 bullets (2-4 if the summary is short). Start each bullet with a [mm:ss] (or [hh:mm:ss]) timestamp from the transcript. Keep the rest of the summary readable and follow the normal formatting guidance; do not prepend timestamps outside the Key moments section. Do not invent timestamps or use ranges.'
-    : ''
+  const timestampInstruction =
+    hasTranscriptTimestamps && !(slides && slides.count > 0)
+      ? 'Add a "Key moments" section with 3-6 bullets (2-4 if the summary is short). Start each bullet with a [mm:ss] (or [hh:mm:ss]) timestamp from the transcript. Keep the rest of the summary readable and follow the normal formatting guidance; do not prepend timestamps outside the Key moments section. Do not invent timestamps or use ranges.'
+      : ''
   const slideParagraphRange = (() => {
     switch (preset) {
       case 'short':
@@ -177,9 +180,9 @@ export function buildLinkSummaryPrompt({
   const slideInstruction =
     slides && slides.count > 0
       ? [
-          'Slides are provided as OCR text with slide indices and timestamps.',
-          'Include a section titled "### Slides" that summarizes the video along the timeline.',
-          'In that section, write short paragraphs (not bullets). Each paragraph MUST start with a [slide:N] tag (N = slide index) and then describe what is happening / being discussed around that moment.',
+          'Slides are provided as transcript excerpts that correspond to time spans between adjacent slides.',
+          'Include a section titled "### Slides" that summarizes the video along the timeline (what they are talking about in each segment).',
+          'In that section, write short paragraphs (not bullets). Each paragraph MUST start with a [slide:N] tag (N = slide index) and then summarize the spoken content for that segment. Small timing drift is OK; do not overfit.',
           `Cover the whole timeline by picking representative slides; include about ${slideParagraphRange} slide paragraphs (adjust down if needed to stay within the length target).`,
           'Use each slide index at most once.',
         ].join(' ')

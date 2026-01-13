@@ -33,24 +33,166 @@ type SlidesResult = Awaited<
   ReturnType<typeof import('../../../slides/index.js').extractSlidesForSource>
 >
 
-const MAX_SLIDE_OCR_CHARS = 8000
+type TranscriptSegment = { startSeconds: number; text: string }
 
-function buildSlidesPromptText(slides: SlidesResult | null | undefined): string | null {
-  if (!slides || slides.slides.length === 0) return null
-  let remaining = MAX_SLIDE_OCR_CHARS
-  const lines: string[] = []
-  for (const slide of slides.slides) {
-    const text = slide.ocrText?.trim()
+const MAX_SLIDE_TRANSCRIPT_CHARS_BY_PRESET = {
+  short: 2500,
+  medium: 5000,
+  long: 9000,
+  xl: 15000,
+  xxl: 24000,
+} as const
+
+const SLIDE_TRANSCRIPT_DEFAULT_EDGE_SECONDS = 30
+const SLIDE_TRANSCRIPT_LEEWAY_SECONDS = 10
+
+function parseTimestampSeconds(value: string): number | null {
+  const parts = value.split(':').map((item) => Number(item))
+  if (parts.some((item) => !Number.isFinite(item))) return null
+  if (parts.length === 2) {
+    const [minutes, seconds] = parts
+    return minutes * 60 + seconds
+  }
+  if (parts.length === 3) {
+    const [hours, minutes, seconds] = parts
+    return hours * 3600 + minutes * 60 + seconds
+  }
+  return null
+}
+
+function parseTranscriptTimedText(input: string | null | undefined): TranscriptSegment[] {
+  if (!input) return []
+  const segments: TranscriptSegment[] = []
+  for (const line of input.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('[')) continue
+    const match = trimmed.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/)
+    if (!match) continue
+    const seconds = parseTimestampSeconds(match[1])
+    if (seconds == null) continue
+    const text = (match[2] ?? '').trim()
     if (!text) continue
-    const timestamp = Number.isFinite(slide.timestamp) ? slide.timestamp : null
-    const label = timestamp != null ? `${timestamp.toFixed(2)}s` : 'unknown'
-    const entry = `Slide ${slide.index} @ ${label}:\n${text}`
-    if (entry.length > remaining && lines.length > 0) break
-    lines.push(entry)
-    remaining -= entry.length
+    segments.push({ startSeconds: seconds, text })
+  }
+  segments.sort((a, b) => a.startSeconds - b.startSeconds)
+  return segments
+}
+
+function formatTimestamp(seconds: number): string {
+  const clamped = Math.max(0, Math.floor(seconds))
+  const hours = Math.floor(clamped / 3600)
+  const minutes = Math.floor((clamped % 3600) / 60)
+  const secs = clamped % 60
+  const mm = String(minutes).padStart(2, '0')
+  const ss = String(secs).padStart(2, '0')
+  if (hours <= 0) return `${minutes}:${ss}`
+  const hh = String(hours).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
+}
+
+function truncateTranscript(value: string, limit: number): string {
+  if (value.length <= limit) return value
+  const truncated = value.slice(0, limit).trimEnd()
+  const clean = truncated.replace(/\s+\S*$/, '').trim()
+  const result = clean.length > 0 ? clean : truncated.trim()
+  return result.length > 0 ? `${result}…` : ''
+}
+
+function pickRepresentativeSlides(
+  slides: Array<{ index: number; timestamp: number }>,
+  target: number
+): Array<{ index: number; timestamp: number }> {
+  if (slides.length <= target) return slides
+  if (target <= 1) return slides.slice(0, 1)
+  const selected = new Map<number, { index: number; timestamp: number }>()
+  for (let i = 0; i < target; i += 1) {
+    const pos = (i * (slides.length - 1)) / (target - 1)
+    const idx = Math.round(pos)
+    const slide = slides[idx]
+    if (!slide) continue
+    selected.set(slide.index, slide)
+  }
+  return Array.from(selected.values()).sort((a, b) => a.timestamp - b.timestamp)
+}
+
+function buildSlidesPromptText({
+  slides,
+  transcriptTimedText,
+  preset,
+}: {
+  slides: SlidesResult | null | undefined
+  transcriptTimedText: string | null | undefined
+  preset: 'short' | 'medium' | 'long' | 'xl' | 'xxl'
+}): string | null {
+  if (!slides || slides.slides.length === 0) return null
+  const segments = parseTranscriptTimedText(transcriptTimedText)
+  if (segments.length === 0) return null
+
+  const slidesWithTimestamps = slides.slides
+    .filter((slide) => Number.isFinite(slide.timestamp))
+    .map((slide) => ({ index: slide.index, timestamp: Math.max(0, Math.floor(slide.timestamp)) }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+  if (slidesWithTimestamps.length === 0) return null
+
+  const targetSlides = (() => {
+    switch (preset) {
+      case 'short':
+        return 6
+      case 'medium':
+        return 10
+      case 'long':
+        return 14
+      case 'xl':
+        return 20
+      case 'xxl':
+        return 30
+      default:
+        return 10
+    }
+  })()
+
+  const selectedSlides = pickRepresentativeSlides(slidesWithTimestamps, targetSlides)
+  const totalBudget = MAX_SLIDE_TRANSCRIPT_CHARS_BY_PRESET[preset]
+  const perSlideBudget = Math.max(240, Math.floor(totalBudget / Math.max(1, selectedSlides.length)))
+
+  let remaining = totalBudget
+  const blocks: string[] = []
+
+  for (let i = 0; i < selectedSlides.length; i += 1) {
+    const slide = selectedSlides[i]
+    if (!slide) continue
+    const prev = selectedSlides[i - 1]
+    const next = selectedSlides[i + 1]
+    const startBase = prev ? Math.floor((prev.timestamp + slide.timestamp) / 2) : slide.timestamp
+    const endBase = next ? Math.ceil((slide.timestamp + next.timestamp) / 2) : slide.timestamp
+    const start = Math.max(
+      0,
+      (prev ? startBase : slide.timestamp - SLIDE_TRANSCRIPT_DEFAULT_EDGE_SECONDS) -
+        SLIDE_TRANSCRIPT_LEEWAY_SECONDS
+    )
+    const end =
+      (next ? endBase : slide.timestamp + SLIDE_TRANSCRIPT_DEFAULT_EDGE_SECONDS) +
+      SLIDE_TRANSCRIPT_LEEWAY_SECONDS
+
+    const excerptParts: string[] = []
+    for (const segment of segments) {
+      if (segment.startSeconds < start) continue
+      if (segment.startSeconds > end) break
+      excerptParts.push(segment.text)
+    }
+    const excerptRaw = excerptParts.join(' ').trim().replace(/\s+/g, ' ')
+    if (!excerptRaw) continue
+
+    const excerpt = truncateTranscript(excerptRaw, Math.min(perSlideBudget, remaining))
+    if (!excerpt) continue
+    const block = `Slide ${slide.index} [${formatTimestamp(start)}–${formatTimestamp(end)}]:\n${excerpt}`
+    if (block.length > remaining && blocks.length > 0) break
+    blocks.push(block)
+    remaining -= block.length
     if (remaining <= 0) break
   }
-  return lines.length > 0 ? lines.join('\n\n') : null
+
+  return blocks.length > 0 ? blocks.join('\n\n') : null
 }
 
 export function buildUrlPrompt({
@@ -71,7 +213,12 @@ export function buildUrlPrompt({
   slides?: SlidesResult | null
 }): string {
   const isYouTube = extracted.siteName === 'YouTube'
-  const slidesText = buildSlidesPromptText(slides)
+  const preset = lengthArg.kind === 'preset' ? lengthArg.preset : 'medium'
+  const slidesText = buildSlidesPromptText({
+    slides,
+    transcriptTimedText: extracted.transcriptTimedText,
+    preset,
+  })
   return buildLinkSummaryPrompt({
     url: extracted.url,
     title: extracted.title,
