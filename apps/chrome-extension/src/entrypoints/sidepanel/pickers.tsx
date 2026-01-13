@@ -38,6 +38,9 @@ type SummarizeControlProps = {
   videoLabel?: string
   pageWords?: number | null
   videoDurationSeconds?: number | null
+  slidesTextMode?: 'transcript' | 'ocr'
+  slidesTextToggleVisible?: boolean
+  onSlidesTextModeChange?: (value: 'transcript' | 'ocr') => void
   onChange: (value: { mode: 'page' | 'video'; slides: boolean }) => void
   onSummarize: () => void
 }
@@ -594,6 +597,13 @@ function SummarizeControl(props: SummarizeControlProps) {
     ...rest
   } = triggerProps
 
+  const showSlidesTextToggle = Boolean(
+    props.slidesEnabled &&
+      props.slidesTextToggleVisible &&
+      props.slidesTextMode &&
+      props.onSlidesTextModeChange
+  )
+
   return (
     <div className="summarizeControlGroup">
       <div className="picker summarizePicker" {...api.getRootProps()}>
@@ -613,6 +623,24 @@ function SummarizeControl(props: SummarizeControlProps) {
         {portalRoot ? createPortal(content, portalRoot) : content}
         <select className="pickerHidden" {...api.getHiddenSelectProps()} />
       </div>
+      {showSlidesTextToggle ? (
+        <div className="summarizeSlidesToggle" role="group" aria-label="Slides text source">
+          <button
+            type="button"
+            data-active={props.slidesTextMode === 'transcript' ? 'true' : 'false'}
+            onClick={() => props.onSlidesTextModeChange?.('transcript')}
+          >
+            Transcript
+          </button>
+          <button
+            type="button"
+            data-active={props.slidesTextMode === 'ocr' ? 'true' : 'false'}
+            onClick={() => props.onSlidesTextModeChange?.('ocr')}
+          >
+            OCR
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from '@mariozechner/pi-ai'
 import { shouldPreferUrlMode } from '@steipete/summarize-core/content/url'
+import { SUMMARY_LENGTH_SPECS } from '@steipete/summarize-core/prompts'
 import MarkdownIt from 'markdown-it'
 
 import { parseSseEvent } from '../../../../../src/shared/sse-events.js'
@@ -41,6 +42,7 @@ type PanelToBg =
   | { type: 'panel:rememberUrl'; url: string }
   | { type: 'panel:setAuto'; value: boolean }
   | { type: 'panel:setLength'; value: string }
+  | { type: 'panel:slides-context'; requestId: string }
   | { type: 'panel:openOptions' }
 
 type BgToPanel =
@@ -55,6 +57,13 @@ type BgToPanel =
       requestId: string
       ok: boolean
       assistant?: AssistantMessage
+      error?: string
+    }
+  | {
+      type: 'slides:context'
+      requestId: string
+      ok: boolean
+      transcriptTimedText?: string | null
       error?: string
     }
 
@@ -226,6 +235,12 @@ let inputMode: 'page' | 'video' = 'page'
 let inputModeOverride: 'page' | 'video' | null = null
 let mediaAvailable = false
 let preserveChatOnNextReset = false
+let summarizeVideoLabel = 'Video'
+let summarizePageWords: number | null = null
+let summarizeVideoDurationSeconds: number | null = null
+
+type SlideTextMode = 'transcript' | 'ocr'
+type TranscriptSegment = { startSeconds: number; text: string }
 
 const AGENT_NAV_TTL_MS = 20_000
 type AgentNavigation = { url: string; tabId: number | null; at: number }
@@ -548,19 +563,72 @@ renderEl.addEventListener('click', (event) => {
   void send({ type: 'panel:seek', seconds })
 })
 
+async function handleSummarizeControlChange(value: { mode: 'page' | 'video'; slides: boolean }) {
+  const prevSlides = slidesEnabledValue
+  const prevMode = inputMode
+  if (value.slides && !slidesEnabledValue) {
+    const tools = await fetchSlideTools()
+    if (!tools.ok) {
+      const missing = tools.missing.join(', ')
+      showSlideNotice(`Slide extraction requires ${missing}. Install and restart the daemon.`)
+      refreshSummarizeControl()
+      return
+    }
+    hideSlideNotice()
+  } else if (!value.slides) {
+    hideSlideNotice()
+    setSlidesBusy(false)
+  }
+  inputMode = value.mode
+  inputModeOverride = value.mode
+  slidesEnabledValue = value.slides
+  await patchSettings({ slidesEnabled: slidesEnabledValue })
+  if (autoValue && (value.mode !== prevMode || value.slides !== prevSlides)) {
+    sendSummarize({ refresh: true })
+  }
+  refreshSummarizeControl()
+}
+
+function handleSlidesTextModeChange(next: SlideTextMode) {
+  if (next === slidesTextMode) return
+  if (next === 'ocr' && !slidesOcrAvailable) return
+  slidesTextMode = next
+  rebuildSlideDescriptions()
+  if (panelState.summaryMarkdown) {
+    renderInlineSlides(renderEl, { fallback: true })
+  }
+  refreshSummarizeControl()
+}
+
 const summarizeControl = mountSummarizeControl(summarizeControlRoot, {
   mode: inputMode,
   slidesEnabled: slidesEnabledValue,
   mediaAvailable: false,
   videoLabel: 'Video',
   busy: false,
-  onChange: (value) => {
-    inputMode = value.mode
-    inputModeOverride = value.mode
-    slidesEnabledValue = value.slides
-  },
+  slidesTextMode,
+  slidesTextToggleVisible,
+  onSlidesTextModeChange: handleSlidesTextModeChange,
+  onChange: handleSummarizeControlChange,
   onSummarize: () => sendSummarize(),
 })
+
+function refreshSummarizeControl() {
+  summarizeControl.update({
+    mode: inputMode,
+    slidesEnabled: slidesEnabledValue,
+    mediaAvailable,
+    busy: slidesBusy,
+    videoLabel: summarizeVideoLabel,
+    pageWords: summarizePageWords,
+    videoDurationSeconds: summarizeVideoDurationSeconds,
+    slidesTextMode,
+    slidesTextToggleVisible,
+    onSlidesTextModeChange: handleSlidesTextModeChange,
+    onChange: handleSummarizeControlChange,
+    onSummarize: () => sendSummarize(),
+  })
+}
 
 function normalizeQueueText(input: string) {
   return input.replace(/\s+/g, ' ').trim()
@@ -889,6 +957,14 @@ function resetSummaryView({ preserveChat = false }: { preserveChat?: boolean } =
   panelState.summaryMarkdown = null
   panelState.summaryFromCache = null
   panelState.slides = null
+  slidesContextPending = false
+  slidesContextUrl = null
+  slidesTranscriptSegments = []
+  slidesTranscriptAvailable = false
+  slidesOcrAvailable = false
+  slidesTextToggleVisible = false
+  slideDescriptions = new Map()
+  refreshSummarizeControl()
   if (!preserveChat) {
     clearSlideImageCache()
     resetChatState()
@@ -941,52 +1017,19 @@ function setSlidesBusy(next: boolean) {
     toggle.dataset.busy = next ? 'true' : 'false'
   }
   headerController.setProgressOverride(next)
+  refreshSummarizeControl()
 }
 
 let slidesExpanded = false
-
-const slideModal = (() => {
-  const root = document.createElement('div')
-  root.className = 'slideModal'
-  root.dataset.open = 'false'
-  root.innerHTML = `
-    <div class="slideModal__content" role="dialog" aria-modal="true">
-      <img class="slideModal__image" alt="Slide preview" />
-      <div class="slideModal__body">
-        <div class="slideModal__title"></div>
-        <div class="slideModal__text"></div>
-      </div>
-    </div>
-  `
-  root.addEventListener('click', (event) => {
-    if (event.target === root) {
-      root.dataset.open = 'false'
-    }
-  })
-  document.body.appendChild(root)
-  return {
-    root,
-    image: root.querySelector('.slideModal__image') as HTMLImageElement,
-    title: root.querySelector('.slideModal__title') as HTMLDivElement,
-    text: root.querySelector('.slideModal__text') as HTMLDivElement,
-  }
-})()
-
-function openSlideModal(slide: {
-  index: number
-  imageUrl: string
-  ocrText?: string | null
-  timestamp?: number | null
-}) {
-  slideModal.image.removeAttribute('src')
-  void setSlideImage(slideModal.image, slide.imageUrl)
-  const timestamp = formatSlideTimestamp(slide.timestamp)
-  slideModal.title.textContent = timestamp
-    ? `Slide ${slide.index} · ${timestamp}`
-    : `Slide ${slide.index}`
-  slideModal.text.textContent = slide.ocrText?.trim() || 'No OCR text available.'
-  slideModal.root.dataset.open = 'true'
-}
+let slidesTextMode: SlideTextMode = 'transcript'
+let slidesTextToggleVisible = false
+let slidesTranscriptSegments: TranscriptSegment[] = []
+let slidesTranscriptAvailable = false
+let slidesOcrAvailable = false
+let slideDescriptions = new Map<number, string>()
+let slidesContextRequestId = 0
+let slidesContextPending = false
+let slidesContextUrl: string | null = null
 
 function formatSlideTimestamp(seconds: number | null | undefined): string | null {
   if (seconds == null || !Number.isFinite(seconds)) return null
@@ -1002,6 +1045,162 @@ function formatSlideTimestamp(seconds: number | null | undefined): string | null
 function seekToSlideTimestamp(seconds: number | null | undefined) {
   if (seconds == null || !Number.isFinite(seconds)) return
   void send({ type: 'panel:seek', seconds: Math.floor(seconds) })
+}
+
+const SLIDE_TEXT_MIN_CHARS = 120
+const SLIDE_TEXT_MAX_CHARS = 600
+const SLIDE_TEXT_WINDOW_MIN_SECONDS = 30
+const SLIDE_TEXT_WINDOW_MAX_SECONDS = 180
+const SLIDE_OCR_MIN_CHARS = 16
+const SLIDE_OCR_SIGNIFICANT_TOTAL = 200
+const SLIDE_OCR_SIGNIFICANT_SLIDES = 3
+const SLIDE_CUSTOM_LENGTH_PATTERN = /^(?<value>\d+(?:\.\d+)?)(?<unit>k|m)?$/i
+
+function resolveLengthTargetCharacters(lengthValue: string): number | null {
+  const normalized = lengthValue.trim().toLowerCase()
+  if (Object.prototype.hasOwnProperty.call(SUMMARY_LENGTH_SPECS, normalized)) {
+    const spec = SUMMARY_LENGTH_SPECS[normalized as keyof typeof SUMMARY_LENGTH_SPECS]
+    return spec?.targetCharacters ?? null
+  }
+  const match = normalized.match(SLIDE_CUSTOM_LENGTH_PATTERN)
+  if (!match) return null
+  const value = Number(match.groups?.value ?? match[1])
+  if (!Number.isFinite(value) || value <= 0) return null
+  const unit = (match.groups?.unit ?? '').toLowerCase()
+  const multiplier = unit === 'm' ? 1_000_000 : unit === 'k' ? 1_000 : 1
+  return Math.round(value * multiplier)
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function resolveSlideTextBudget(lengthValue: string): number {
+  const target = resolveLengthTargetCharacters(lengthValue) ?? SUMMARY_LENGTH_SPECS.short.targetCharacters
+  const perSlide = Math.round(target / 15)
+  return clampNumber(perSlide, SLIDE_TEXT_MIN_CHARS, SLIDE_TEXT_MAX_CHARS)
+}
+
+function resolveSlideWindowSeconds(lengthValue: string): number {
+  const target = resolveLengthTargetCharacters(lengthValue) ?? SUMMARY_LENGTH_SPECS.short.targetCharacters
+  const window = Math.round(target / 100)
+  return clampNumber(window, SLIDE_TEXT_WINDOW_MIN_SECONDS, SLIDE_TEXT_WINDOW_MAX_SECONDS)
+}
+
+function normalizeSlideText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function truncateSlideText(value: string, limit: number): string {
+  if (value.length <= limit) return value
+  const truncated = value.slice(0, limit).trimEnd()
+  const clean = truncated.replace(/\s+\S*$/, '').trim()
+  const result = clean.length > 0 ? clean : truncated.trim()
+  return result.length > 0 ? `${result}...` : ''
+}
+
+function parseTranscriptTimedText(input: string | null | undefined): TranscriptSegment[] {
+  if (!input) return []
+  const segments: TranscriptSegment[] = []
+  const lines = input.split('\n')
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('[')) continue
+    const match = trimmed.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/)
+    if (!match) continue
+    const seconds = parseTimestampSeconds(match[1])
+    if (seconds == null) continue
+    const text = normalizeSlideText(match[2] ?? '')
+    if (!text) continue
+    segments.push({ startSeconds: seconds, text })
+  }
+  segments.sort((a, b) => a.startSeconds - b.startSeconds)
+  return segments
+}
+
+function getTranscriptTextForSlide(
+  slide: { timestamp?: number | null },
+  budget: number,
+  windowSeconds: number
+): string {
+  if (slide.timestamp == null || !Number.isFinite(slide.timestamp)) return ''
+  if (slidesTranscriptSegments.length === 0) return ''
+  const center = Math.max(0, Math.floor(slide.timestamp))
+  const lower = Math.max(0, center - windowSeconds)
+  const upper = center + windowSeconds
+  const parts: string[] = []
+  for (const segment of slidesTranscriptSegments) {
+    if (segment.startSeconds < lower) continue
+    if (segment.startSeconds > upper) break
+    parts.push(segment.text)
+  }
+  const text = normalizeSlideText(parts.join(' '))
+  return text ? truncateSlideText(text, budget) : ''
+}
+
+function getOcrTextForSlide(slide: { ocrText?: string | null }, budget: number): string {
+  const text = normalizeSlideText(slide.ocrText ?? '')
+  return text ? truncateSlideText(text, budget) : ''
+}
+
+function rebuildSlideDescriptions() {
+  slideDescriptions = new Map()
+  if (!panelState.slides) return
+  const budget = resolveSlideTextBudget(pickerSettings.length)
+  const windowSeconds = resolveSlideWindowSeconds(pickerSettings.length)
+  for (const slide of panelState.slides.slides) {
+    const text =
+      slidesTextMode === 'ocr'
+        ? getOcrTextForSlide(slide, budget)
+        : getTranscriptTextForSlide(slide, budget, windowSeconds)
+    slideDescriptions.set(slide.index, text)
+  }
+}
+
+function updateSlidesTextState() {
+  slidesOcrAvailable = false
+  slidesTextToggleVisible = false
+  let ocrTotal = 0
+  let ocrSlides = 0
+  if (panelState.slides) {
+    for (const slide of panelState.slides.slides) {
+      const text = normalizeSlideText(slide.ocrText ?? '')
+      if (text.length > 0) slidesOcrAvailable = true
+      if (text.length >= SLIDE_OCR_MIN_CHARS) {
+        ocrTotal += text.length
+        ocrSlides += 1
+      }
+    }
+  }
+  const ocrSignificant =
+    slidesOcrAvailable &&
+    ocrTotal >= SLIDE_OCR_SIGNIFICANT_TOTAL &&
+    ocrSlides >= SLIDE_OCR_SIGNIFICANT_SLIDES
+  slidesTextToggleVisible = slidesTranscriptAvailable && ocrSignificant
+  if (slidesTranscriptAvailable) {
+    if (!slidesTextToggleVisible) {
+      slidesTextMode = 'transcript'
+    } else if (!slidesOcrAvailable && slidesTextMode === 'ocr') {
+      slidesTextMode = 'transcript'
+    }
+  } else if (slidesOcrAvailable) {
+    slidesTextMode = 'ocr'
+  } else {
+    slidesTextMode = 'transcript'
+  }
+  rebuildSlideDescriptions()
+  refreshSummarizeControl()
+}
+
+async function requestSlidesContext() {
+  if (!panelState.slides || slidesContextPending) return
+  const sourceUrl = panelState.slides.sourceUrl || panelState.currentSource?.url || null
+  if (sourceUrl && slidesContextUrl === sourceUrl) return
+  slidesContextPending = true
+  slidesContextRequestId += 1
+  const requestId = `slides-${slidesContextRequestId}`
+  slidesContextUrl = sourceUrl
+  void send({ type: 'panel:slides-context', requestId })
 }
 
 const MAX_SLIDE_STRIP = 12
@@ -1063,9 +1262,14 @@ function renderSlideStrip(container: HTMLElement) {
     meta.textContent = timestamp ? `Slide ${slide.index} · ${timestamp}` : `Slide ${slide.index}`
     button.appendChild(img)
     button.appendChild(meta)
+    if (slidesExpanded) {
+      const description = document.createElement('div')
+      description.className = 'slideStrip__text'
+      description.textContent = slideDescriptions.get(slide.index) ?? ''
+      button.appendChild(description)
+    }
     button.addEventListener('click', () => {
       seekToSlideTimestamp(slide.timestamp)
-      openSlideModal(slide)
     })
     grid.appendChild(button)
   }
@@ -1102,7 +1306,6 @@ function renderInlineSlides(container: HTMLElement, opts?: { fallback?: boolean 
     button.appendChild(caption)
     button.addEventListener('click', () => {
       seekToSlideTimestamp(slide.timestamp)
-      openSlideModal(slide)
     })
     wrapper.appendChild(button)
     placeholder.replaceWith(wrapper)
@@ -1929,6 +2132,12 @@ const streamController = createStreamController({
   onSlides: (data) => {
     panelState.slides = data
     setSlidesBusy(false)
+    slidesContextPending = false
+    slidesContextUrl = null
+    slidesTranscriptSegments = []
+    slidesTranscriptAvailable = false
+    updateSlidesTextState()
+    void requestSlidesContext()
     if (panelState.summaryMarkdown) {
       renderInlineSlides(renderEl, { fallback: true })
     }
@@ -2315,6 +2524,10 @@ function updateControls(state: UiState) {
       length: pickerSettings.length,
       onLengthChange: pickerHandlers.onLengthChange,
     })
+    rebuildSlideDescriptions()
+    if (panelState.summaryMarkdown) {
+      renderInlineSlides(renderEl, { fallback: true })
+    }
   }
   if (
     state.settings.fontSize !== currentFontSize ||
@@ -2359,48 +2572,10 @@ function updateControls(state: UiState) {
     inputModeOverride = null
   }
   mediaAvailable = nextMediaAvailable
-  const updateSummarizeControl = () => {
-    summarizeControl.update({
-      mode: inputMode,
-      slidesEnabled: slidesEnabledValue,
-      mediaAvailable,
-      busy: slidesBusy,
-      videoLabel: nextVideoLabel,
-      pageWords: state.stats.pageWords,
-      videoDurationSeconds: state.stats.videoDurationSeconds,
-      onChange: (value) => {
-        void (async () => {
-          const prevSlides = slidesEnabledValue
-          const prevMode = inputMode
-          if (value.slides && !slidesEnabledValue) {
-            const tools = await fetchSlideTools()
-            if (!tools.ok) {
-              const missing = tools.missing.join(', ')
-              showSlideNotice(
-                `Slide extraction requires ${missing}. Install and restart the daemon.`
-              )
-              updateSummarizeControl()
-              return
-            }
-            hideSlideNotice()
-          } else if (!value.slides) {
-            hideSlideNotice()
-            setSlidesBusy(false)
-          }
-          inputMode = value.mode
-          inputModeOverride = value.mode
-          slidesEnabledValue = value.slides
-          await patchSettings({ slidesEnabled: slidesEnabledValue })
-          if (autoValue && (value.mode !== prevMode || value.slides !== prevSlides)) {
-            sendSummarize({ refresh: true })
-          }
-          updateSummarizeControl()
-        })()
-      },
-      onSummarize: () => sendSummarize(),
-    })
-  }
-  updateSummarizeControl()
+  summarizeVideoLabel = nextVideoLabel
+  summarizePageWords = state.stats.pageWords
+  summarizeVideoDurationSeconds = state.stats.videoDurationSeconds
+  refreshSummarizeControl()
   const showingSetup = maybeShowSetup(state)
   if (showingSetup && panelState.phase !== 'setup') {
     setPhase('setup')
@@ -2431,6 +2606,28 @@ function handleBgMessage(msg: BgToPanel) {
         finishStreamingMessage()
       }
       return
+    case 'slides:context': {
+      if (!panelState.slides) return
+      const expectedId = `slides-${slidesContextRequestId}`
+      if (msg.requestId !== expectedId) return
+      slidesContextPending = false
+      if (!msg.ok) {
+        slidesTranscriptSegments = []
+        slidesTranscriptAvailable = false
+        updateSlidesTextState()
+        if (panelState.summaryMarkdown) {
+          renderInlineSlides(renderEl, { fallback: true })
+        }
+        return
+      }
+      slidesTranscriptSegments = parseTranscriptTimedText(msg.transcriptTimedText ?? null)
+      slidesTranscriptAvailable = slidesTranscriptSegments.length > 0
+      updateSlidesTextState()
+      if (panelState.summaryMarkdown) {
+        renderInlineSlides(renderEl, { fallback: true })
+      }
+      return
+    }
     case 'run:start': {
       setPhase('connecting')
       lastAction = 'summarize'

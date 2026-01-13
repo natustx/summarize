@@ -37,6 +37,7 @@ type PanelToBg =
   | { type: 'panel:rememberUrl'; url: string }
   | { type: 'panel:setAuto'; value: boolean }
   | { type: 'panel:setLength'; value: string }
+  | { type: 'panel:slides-context'; requestId: string }
   | { type: 'panel:openOptions' }
 
 type RunStart = {
@@ -59,6 +60,13 @@ type BgToPanel =
       requestId: string
       ok: boolean
       assistant?: AssistantMessage
+      error?: string
+    }
+  | {
+      type: 'slides:context'
+      requestId: string
+      ok: boolean
+      transcriptTimedText?: string | null
       error?: string
     }
 
@@ -802,6 +810,11 @@ export default defineBackground(() => {
     opts?: { checkRecovery?: boolean }
   ) => {
     const settings = await loadSettings()
+    const logPanel = (event: string, detail?: Record<string, unknown>) => {
+      if (!settings.extendedLogging) return
+      const payload = detail ? { event, ...detail } : { event }
+      console.debug('[summarize][panel:bg]', payload)
+    }
     const tab = await getActiveTab(session.windowId)
     const health = await daemonHealth()
     const authed = settings.token.trim() ? await daemonPing(settings.token.trim()) : { ok: false }
@@ -1003,6 +1016,13 @@ export default defineBackground(() => {
       (opts?.inputMode === 'video' ||
         resolvedPayload.media?.hasVideo === true ||
         shouldPreferUrlMode(resolvedPayload.url))
+    logPanel('summarize:start', {
+      reason,
+      url: resolvedPayload.url,
+      inputMode: opts?.inputMode ?? null,
+      wantsSummaryTimestamps,
+      wantsSlides,
+    })
 
     cachedExtracts.set(tab.id, {
       url: resolvedPayload.url,
@@ -1035,6 +1055,11 @@ export default defineBackground(() => {
         inputMode: opts?.inputMode,
         timestamps: wantsSummaryTimestamps,
         slidesEnabled: wantsSlides,
+      })
+      logPanel('summarize:request', {
+        url: resolvedPayload.url,
+        slides: wantsSlides,
+        timestamps: wantsSummaryTimestamps,
       })
       const res = await fetch('http://127.0.0.1:8787/v1/summarize', {
         method: 'POST',
@@ -1568,6 +1593,42 @@ export default defineBackground(() => {
           await patchSettings({ length: next })
           void emitState(session, '')
           void summarizeActiveTab(session, 'length-change')
+        })()
+        break
+      case 'panel:slides-context':
+        void (async () => {
+          const requestId = (raw as { requestId?: string }).requestId
+          if (!requestId) return
+          const settings = await loadSettings()
+          const logSlides = (event: string, detail?: Record<string, unknown>) => {
+            if (!settings.extendedLogging) return
+            const payload = detail ? { event, ...detail } : { event }
+            console.debug('[summarize][slides:bg]', payload)
+          }
+          const tab = await getActiveTab(session.windowId)
+          if (!tab?.id || !canSummarizeUrl(tab.url)) {
+            void send(session, {
+              type: 'slides:context',
+              requestId,
+              ok: false,
+              error: 'No active tab for slides.',
+            })
+            logSlides('context:error', { reason: 'no-tab' })
+            return
+          }
+          const cached = getCachedExtract(tab.id, tab.url ?? null)
+          const transcriptTimedText = cached?.transcriptTimedText ?? null
+          void send(session, {
+            type: 'slides:context',
+            requestId,
+            ok: true,
+            transcriptTimedText,
+          })
+          logSlides('context:ready', {
+            url: tab.url,
+            transcriptTimedText: Boolean(transcriptTimedText),
+            slides: cached?.slides?.slides?.length ?? 0,
+          })
         })()
         break
       case 'panel:openOptions':

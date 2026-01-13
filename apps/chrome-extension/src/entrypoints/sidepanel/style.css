@@ -554,6 +554,30 @@ header {
   pointer-events: none;
 }
 
+.summarizeSlidesToggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.summarizeSlidesToggle button {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--muted);
+  background: transparent;
+}
+
+.summarizeSlidesToggle button[data-active="true"] {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .summarizeSlideToggle {
   width: 32px;
   height: 32px;
@@ -1983,6 +2007,18 @@ button.setup__pill.isActive {
   font-size: 12px;
   color: var(--muted);
   padding: 0 10px 10px;
+}
+
+.slideStrip__text {
+  padding: 0 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: normal;
+}
+
+.slideStrip__text:empty {
+  display: none;
 }
 
 .slideModal {
