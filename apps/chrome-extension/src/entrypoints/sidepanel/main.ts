@@ -940,6 +940,7 @@ function setSlidesBusy(next: boolean) {
   if (toggle) {
     toggle.dataset.busy = next ? 'true' : 'false'
   }
+  headerController.setProgressOverride(next)
 }
 
 const slideModal = (() => {

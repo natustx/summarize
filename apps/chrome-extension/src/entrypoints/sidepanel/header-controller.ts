@@ -12,6 +12,7 @@ export type HeaderController = {
   setStatus: (text: string) => void
   armProgress: () => void
   stopProgress: () => void
+  setProgressOverride: (next: boolean) => void
   updateHeaderOffset: () => void
 }
 
@@ -32,6 +33,10 @@ export function createHeaderController({
   let baseSubtitle = ''
   let statusText = ''
   let showProgress = false
+  let progressOverride = false
+
+  const shouldAllowProgress = (force = false) =>
+    force || progressOverride || getState().summaryFromCache !== true
 
   const updateHeader = () => {
     const { phase } = getState()
@@ -96,10 +101,10 @@ export function createHeaderController({
       trimmed.length > 0 &&
       (trimmed.toLowerCase().startsWith('error:') || trimmed.toLowerCase().includes(' error'))
     const split = splitStatusPercent(text)
-    const { summaryFromCache, phase } = getState()
-    if (split.percent && summaryFromCache !== true) {
+    const { phase } = getState()
+    if (split.percent && shouldAllowProgress()) {
       armProgress()
-    } else if (trimmed && summaryFromCache !== true && !isError) {
+    } else if (trimmed && shouldAllowProgress() && !isError) {
       armProgress()
     } else if (!trimmed && !(phase === 'connecting' || phase === 'streaming')) {
       stopProgress()
@@ -108,7 +113,7 @@ export function createHeaderController({
   }
 
   const armProgress = () => {
-    if (getState().summaryFromCache === true) return
+    if (!shouldAllowProgress()) return
     if (showProgress) return
     showProgress = true
     updateHeader()
@@ -120,12 +125,26 @@ export function createHeaderController({
     updateHeader()
   }
 
+  const setProgressOverride = (next: boolean) => {
+    progressOverride = next
+    if (next) {
+      if (!showProgress) showProgress = true
+    } else if (
+      !statusText.trim() &&
+      !(getState().phase === 'connecting' || getState().phase === 'streaming')
+    ) {
+      showProgress = false
+    }
+    updateHeader()
+  }
+
   return {
     setBaseTitle,
     setBaseSubtitle,
     setStatus,
     armProgress,
     stopProgress,
+    setProgressOverride,
     updateHeaderOffset,
   }
 }
