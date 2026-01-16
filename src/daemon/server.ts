@@ -19,6 +19,7 @@ import { completeAgentResponse, streamAgentResponse } from './agent.js'
 import { type DaemonRequestedMode, resolveAutoDaemonMode } from './auto-mode.js'
 import type { DaemonConfig } from './config.js'
 import { DAEMON_HOST, DAEMON_PORT_DEFAULT } from './constants.js'
+import { resolveDaemonLogPaths } from './launchd.js'
 import { buildModelPickerOptions } from './models.js'
 import {
   extractContentForUrl,
@@ -57,6 +58,47 @@ function json(
     ...headers,
   })
   res.end(body)
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.max(min, Math.min(max, value))
+}
+
+async function readLogTail({
+  filePath,
+  maxBytes,
+  maxLines,
+}: {
+  filePath: string
+  maxBytes: number
+  maxLines: number
+}): Promise<{ lines: string[]; truncated: boolean; bytesRead: number }> {
+  const stat = await fs.stat(filePath)
+  const size = stat.size
+  const readBytes = Math.max(0, Math.min(size, maxBytes))
+  const handle = await fs.open(filePath, 'r')
+  try {
+    const buffer = Buffer.alloc(readBytes)
+    const start = Math.max(0, size - readBytes)
+    await handle.read(buffer, 0, readBytes, start)
+    let text = buffer.toString('utf8')
+    let truncated = size > readBytes
+    if (truncated) {
+      const firstNewline = text.indexOf('\n')
+      if (firstNewline !== -1) {
+        text = text.slice(firstNewline + 1)
+      }
+    }
+    let lines = text.split(/\r?\n/).filter((line) => line.length > 0)
+    if (lines.length > maxLines) {
+      lines = lines.slice(lines.length - maxLines)
+      truncated = true
+    }
+    return { lines, truncated, bytesRead: readBytes }
+  } finally {
+    await handle.close()
+  }
 }
 
 function text(
@@ -327,6 +369,9 @@ export async function runDaemonServer({
 }): Promise<void> {
   const { config: summarizeConfig } = loadSummarizeConfig({ env })
   const daemonLogger = createDaemonLogger({ env, config: summarizeConfig })
+  const daemonLogPaths = resolveDaemonLogPaths(env)
+  const daemonLogFile =
+    daemonLogger.config?.file ?? path.join(daemonLogPaths.logDir, 'daemon.jsonl')
   const cacheState = await createCacheStateFromConfig({
     envForRun: env,
     config: summarizeConfig,
@@ -366,6 +411,65 @@ export async function runDaemonServer({
 
       if (req.method === 'GET' && pathname === '/v1/ping') {
         json(res, 200, { ok: true }, cors)
+        return
+      }
+
+      if (req.method === 'GET' && pathname === '/v1/logs') {
+        const source = url.searchParams.get('source')?.trim() || 'daemon'
+        const tailParam = url.searchParams.get('tail')?.trim() || ''
+        const tail = clampNumber(Number(tailParam || '800'), 50, 5000)
+        const maxBytes = clampNumber(Number(url.searchParams.get('maxBytes') ?? '262144'), 16_384, 2_000_000)
+
+        const sources: Record<
+          string,
+          { filePath: string; format: 'json' | 'pretty' | 'text'; enabled?: boolean }
+        > = {
+          daemon: { filePath: daemonLogFile, format: daemonLogger.config?.format ?? 'json', enabled: daemonLogger.enabled },
+          stdout: { filePath: daemonLogPaths.stdoutPath, format: 'text' },
+          stderr: { filePath: daemonLogPaths.stderrPath, format: 'text' },
+        }
+
+        const selected = sources[source]
+        if (!selected) {
+          json(res, 400, { ok: false, error: `Unknown log source "${source}".` }, cors)
+          return
+        }
+
+        const stat = await fs.stat(selected.filePath).catch(() => null)
+        if (!stat?.isFile()) {
+          const disabledNote =
+            source === 'daemon' && selected.enabled === false
+              ? 'Daemon logging is disabled (no log file).'
+              : 'Log file not found.'
+          json(res, 404, { ok: false, error: disabledNote }, cors)
+          return
+        }
+
+        const { lines, truncated, bytesRead } = await readLogTail({
+          filePath: selected.filePath,
+          maxBytes,
+          maxLines: tail,
+        })
+        const warning =
+          source === 'daemon' && selected.enabled === false
+            ? 'Daemon logging disabled; showing existing file only.'
+            : null
+        json(
+          res,
+          200,
+          {
+            ok: true,
+            source,
+            format: selected.format,
+            lines,
+            truncated,
+            bytesRead,
+            sizeBytes: stat.size,
+            mtimeMs: stat.mtimeMs,
+            ...(warning ? { warning } : {}),
+          },
+          cors
+        )
         return
       }
 
