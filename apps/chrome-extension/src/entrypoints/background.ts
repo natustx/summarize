@@ -770,7 +770,10 @@ export default defineBackground(() => {
     }
 
     const wantsSlides = settings.slidesEnabled && shouldPreferUrlMode(tab.url)
-    sendStatus(session, 'Extracting page content…')
+    const urlStatusLabel = wantsSlides
+      ? 'Extracting video + thumbnails…'
+      : 'Extracting video transcript…'
+    sendStatus(session, urlStatusLabel)
     const res = await fetch('http://127.0.0.1:8787/v1/summarize', {
       method: 'POST',
       headers: {
