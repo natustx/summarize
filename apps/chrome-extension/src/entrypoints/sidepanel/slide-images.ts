@@ -1,0 +1,179 @@
+import { loadSettings, type Settings } from '../../lib/settings'
+
+const SLIDE_THUMB_SELECTOR = '.slideStrip__thumb, .slideInline__thumb, .slideGallery__thumb'
+
+export function normalizeSlideImageUrl(
+  imageUrl: string | null | undefined,
+  sourceId: string,
+  index: number
+): string {
+  if (!imageUrl) return ''
+  const stablePrefix = `http://127.0.0.1:8787/v1/slides/${sourceId}`
+  if (imageUrl.startsWith(stablePrefix)) return imageUrl
+  if (!imageUrl.includes('/v1/summarize/')) return imageUrl
+  const queryIndex = imageUrl.indexOf('?')
+  const query = queryIndex >= 0 ? imageUrl.slice(queryIndex) : ''
+  return `${stablePrefix}/${index}${query}`
+}
+
+type SlideImageLoader = {
+  observe: (img: HTMLImageElement, imageUrl: string) => void
+  clearCache: () => void
+}
+
+export function createSlideImageLoader(
+  options: { loadSettings?: () => Promise<Settings> } = {}
+): SlideImageLoader {
+  const loadSettingsFn = options.loadSettings ?? loadSettings
+  const slideImageCache = new Map<string, string>()
+  const slideImagePending = new Map<string, Promise<string | null>>()
+  const slideImageRetryTimers = new WeakMap<HTMLImageElement, number>()
+  const slideImageObserverEntries = new WeakMap<HTMLImageElement, { imageUrl: string }>()
+
+  const markSlideImageLoaded = (img: HTMLImageElement) => {
+    img.dataset.loaded = 'true'
+    const parent = img.closest<HTMLElement>(SLIDE_THUMB_SELECTOR)
+    parent?.classList.remove('isPlaceholder')
+  }
+
+  const clearCache = () => {
+    for (const url of slideImageCache.values()) {
+      URL.revokeObjectURL(url)
+    }
+    slideImageCache.clear()
+    slideImagePending.clear()
+  }
+
+  const resolveSlideImageUrl = async (imageUrl: string): Promise<string | null> => {
+    if (!imageUrl) return null
+    const cached = slideImageCache.get(imageUrl)
+    if (cached) return cached
+    const pending = slideImagePending.get(imageUrl)
+    if (pending) return pending
+
+    const task = (async () => {
+      try {
+        const settings = await loadSettingsFn()
+        const token = settings.token.trim()
+        if (!token) return null
+        const res = await fetch(imageUrl, { headers: { Authorization: `Bearer ${token}` } })
+        if (!res.ok) {
+          if (settings.extendedLogging) {
+            console.debug('[summarize] slide fetch failed', { url: imageUrl, status: res.status })
+          }
+          return null
+        }
+        const readyHeader = res.headers.get('x-summarize-slide-ready')
+        if (readyHeader === '0') {
+          if (settings.extendedLogging) {
+            console.debug('[summarize] slide not ready', { url: imageUrl })
+          }
+          return null
+        }
+        const blob = await res.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        slideImageCache.set(imageUrl, objectUrl)
+        return objectUrl
+      } catch {
+        return null
+      } finally {
+        slideImagePending.delete(imageUrl)
+      }
+    })()
+
+    slideImagePending.set(imageUrl, task)
+    return task
+  }
+
+  const setSlideImage = async (img: HTMLImageElement, imageUrl: string) => {
+    if (!imageUrl) return
+    const existingTimer = slideImageRetryTimers.get(img)
+    if (existingTimer) {
+      window.clearTimeout(existingTimer)
+      slideImageRetryTimers.delete(img)
+    }
+    const cached = slideImageCache.get(imageUrl)
+    if (cached) {
+      if (img.src !== cached) img.src = cached
+      markSlideImageLoaded(img)
+      return
+    }
+    img.dataset.slideImageUrl = imageUrl
+    const resolved = await resolveSlideImageUrl(imageUrl)
+    if (!resolved) {
+      if (img.dataset.slideImageUrl !== imageUrl) return
+      const retryCount = Number(img.dataset.slideRetryCount ?? '0')
+      if (!Number.isFinite(retryCount)) return
+      const startedAt = Number(img.dataset.slideRetryStartedAt ?? '0')
+      const elapsedMs = startedAt > 0 ? Date.now() - startedAt : 0
+      if (elapsedMs > 20 * 60_000) return
+      const nextRetry = retryCount + 1
+      img.dataset.slideRetryCount = String(nextRetry)
+      const delayMs = Math.min(30_000, Math.round(500 * 1.7 ** retryCount))
+      const timer = window.setTimeout(() => {
+        if (img.dataset.slideImageUrl !== imageUrl) return
+        void setSlideImage(img, imageUrl)
+      }, delayMs)
+      slideImageRetryTimers.set(img, timer)
+      return
+    }
+    if (img.dataset.slideImageUrl !== imageUrl) return
+    if (img.src !== resolved) img.src = resolved
+  }
+
+  const slideImageObserver =
+    typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (!entry.isIntersecting) continue
+              const img = entry.target as HTMLImageElement
+              const info = slideImageObserverEntries.get(img)
+              if (!info) continue
+              slideImageObserverEntries.delete(img)
+              slideImageObserver?.unobserve(img)
+              img.dataset.slideObserveArmed = 'false'
+              void setSlideImage(img, info.imageUrl)
+            }
+          },
+          { rootMargin: '320px 0px' }
+        )
+      : null
+
+  const observe = (img: HTMLImageElement, imageUrl: string) => {
+    if (!imageUrl) return
+    const isSameUrl = img.dataset.slideImageUrl === imageUrl
+    if (isSameUrl) {
+      if (img.dataset.loaded === 'true' && img.src) return
+      if (img.dataset.slideObserveArmed === 'true') return
+    }
+    const hadVisibleImage = img.dataset.loaded === 'true' && Boolean(img.src)
+    img.dataset.slideImageUrl = imageUrl
+    if (!hadVisibleImage) {
+      img.dataset.loaded = 'false'
+    }
+    const thumb = img.closest<HTMLElement>(SLIDE_THUMB_SELECTOR)
+    if (thumb && img.dataset.loaded !== 'true') thumb.classList.add('isPlaceholder')
+    if (!isSameUrl) {
+      img.dataset.slideRetryCount = '0'
+      img.dataset.slideRetryStartedAt = String(Date.now())
+    } else if (!img.dataset.slideRetryCount) {
+      img.dataset.slideRetryCount = '0'
+    }
+    if (img.dataset.slideLoadListener !== 'true') {
+      img.dataset.slideLoadListener = 'true'
+      img.addEventListener('load', () => {
+        markSlideImageLoaded(img)
+      })
+    }
+    if (!slideImageObserver) {
+      void setSlideImage(img, imageUrl)
+      return
+    }
+    img.dataset.slideObserveArmed = 'true'
+    slideImageObserverEntries.set(img, { imageUrl })
+    slideImageObserver.observe(img)
+  }
+
+  return { observe, clearCache }
+}
