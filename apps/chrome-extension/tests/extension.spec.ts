@@ -328,6 +328,7 @@ async function mockDaemonSummarize(harness: ExtensionHarness) {
       globalThis.__summarizeCalls = 0
     }
     globalThis.__summarizeLastBody = null
+    globalThis.__summarizeBodies = []
     globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url === 'http://127.0.0.1:8787/health') {
@@ -341,7 +342,9 @@ async function mockDaemonSummarize(harness: ExtensionHarness) {
         const body = typeof init?.body === 'string' ? init.body : null
         if (body) {
           try {
-            globalThis.__summarizeLastBody = JSON.parse(body)
+            const parsed = JSON.parse(body)
+            globalThis.__summarizeLastBody = parsed
+            globalThis.__summarizeBodies.push(parsed)
           } catch {
             globalThis.__summarizeLastBody = null
           }
@@ -371,6 +374,13 @@ async function getSummarizeLastBody(harness: ExtensionHarness) {
     harness.context.serviceWorkers()[0] ??
     (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
   return background.evaluate(() => globalThis.__summarizeLastBody ?? null)
+}
+
+async function getSummarizeBodies(harness: ExtensionHarness) {
+  const background =
+    harness.context.serviceWorkers()[0] ??
+    (await harness.context.waitForEvent('serviceworker', { timeout: 15_000 }))
+  return background.evaluate(() => (globalThis.__summarizeBodies as unknown[] | undefined) ?? [])
 }
 
 async function seedSettings(harness: ExtensionHarness, settings: Record<string, unknown>) {
@@ -926,9 +936,15 @@ test('sidepanel video selection forces transcript mode', async ({
     await waitForActiveTabUrl(harness, 'https://www.youtube.com/watch?v=abc123')
 
     await sendPanelMessage(page, { type: 'panel:summarize', inputMode: 'video', refresh: false })
-    await expect.poll(() => getSummarizeCalls(harness)).toBe(1)
+    await expect
+      .poll(async () => {
+        const bodies = (await getSummarizeBodies(harness)) as Array<Record<string, unknown>>
+        return bodies.some((body) => body?.videoMode === 'transcript')
+      })
+      .toBe(true)
 
-    const body = (await getSummarizeLastBody(harness)) as Record<string, unknown> | null
+    const bodies = (await getSummarizeBodies(harness)) as Array<Record<string, unknown>>
+    const body = bodies.find((item) => item?.videoMode === 'transcript') ?? null
     expect(body?.mode).toBe('url')
     expect(body?.videoMode).toBe('transcript')
     assertNoErrors(harness)
@@ -1002,9 +1018,16 @@ test('sidepanel video selection requests slides when enabled', async ({
     await waitForActiveTabUrl(harness, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
 
     await sendPanelMessage(page, { type: 'panel:summarize', inputMode: 'video', refresh: false })
-    await expect.poll(() => getSummarizeCalls(harness)).toBe(1)
+    await expect
+      .poll(async () => {
+        const bodies = (await getSummarizeBodies(harness)) as Array<Record<string, unknown>>
+        return bodies.some((body) => body?.videoMode === 'transcript' && body?.slides === true)
+      })
+      .toBe(true)
 
-    const body = (await getSummarizeLastBody(harness)) as Record<string, unknown> | null
+    const bodies = (await getSummarizeBodies(harness)) as Array<Record<string, unknown>>
+    const body =
+      bodies.find((item) => item?.videoMode === 'transcript' && item?.slides === true) ?? null
     expect(body?.mode).toBe('url')
     expect(body?.videoMode).toBe('transcript')
     expect(body?.slides).toBe(true)
@@ -1186,6 +1209,14 @@ test('sidepanel loads slide images after they become ready', async ({
     )
 
     await sendPanelMessage(page, { type: 'panel:summarize', inputMode: 'video', refresh: false })
+    await page.waitForFunction(() => {
+      const hooks = (
+        window as typeof globalThis & {
+          __summarizeTestHooks?: { getRunId?: () => string | null }
+        }
+      ).__summarizeTestHooks
+      return Boolean(hooks?.getRunId?.())
+    })
     await page.evaluate((payload) => {
       const hooks = (
         window as typeof globalThis & {

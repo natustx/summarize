@@ -1544,11 +1544,13 @@ const slidesTestHooks = (
   globalThis as {
     __summarizeTestHooks?: {
       applySlidesPayload?: (payload: SseSlidesData) => void
+      getRunId?: () => string | null
     }
   }
 ).__summarizeTestHooks
 if (slidesTestHooks) {
   slidesTestHooks.applySlidesPayload = applySlidesPayload
+  slidesTestHooks.getRunId = () => panelState.runId
 }
 
 async function requestSlidesContext() {
