@@ -181,6 +181,8 @@ summarize "https://example.com" --length 20k
   - Provider/model APIs still enforce their own maximum output limits.
   - If omitted, no max token parameter is sent (provider default).
   - Prefer `--length` unless you need a hard cap.
+- Short content: when extracted content is shorter than the requested length, the CLI returns the content as-is.
+  - Override with `--force-summary` to always run the LLM.
 - Minimums: `--length` numeric values must be >= 50 chars; `--max-output-tokens` must be >= 16.
 - Preset targets (source of truth: `packages/core/src/prompts/summary-lengths.ts`):
   - short: target ~900 chars (range 600-1,200)
