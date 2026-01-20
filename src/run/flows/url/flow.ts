@@ -242,7 +242,14 @@ export async function runUrlFlow({
       cacheMode: cacheState.mode,
     })
 
-    const fetchWithCache = async (targetUrl: string): Promise<ExtractedLinkContent> => {
+    const fetchWithCache = async (
+      targetUrl: string,
+      {
+        bypassExtractCache = false,
+      }: {
+        bypassExtractCache?: boolean
+      } = {}
+    ): Promise<ExtractedLinkContent> => {
       const options = buildFetchOptions()
       const cacheKey =
         cacheStore && cacheState.mode === 'default'
@@ -261,7 +268,7 @@ export async function runUrlFlow({
               },
             })
           : null
-      if (cacheKey && cacheStore) {
+      if (!bypassExtractCache && cacheKey && cacheStore) {
         const cached = cacheStore.getJson<ExtractedLinkContent>('extract', cacheKey)
         if (cached) {
           writeVerbose(
@@ -362,6 +369,22 @@ export async function runUrlFlow({
     }
 
     let extracted = await fetchWithCache(url)
+    if (flags.slides && !resolveSlideSource({ url, extracted })) {
+      const isTwitter = urlUtils.isTwitterStatusUrl?.(url) ?? false
+      if (isTwitter) {
+        const refreshed = await fetchWithCache(url, { bypassExtractCache: true })
+        if (resolveSlideSource({ url, extracted: refreshed })) {
+          writeVerbose(
+            io.stderr,
+            flags.verbose,
+            'extract refresh for slides',
+            flags.verboseColor,
+            io.envForRun
+          )
+          extracted = refreshed
+        }
+      }
+    }
     let extractionUi = deriveExtractionUi(extracted)
     let slidesExtracted: SlideExtractionResult | null = null
     let slidesDone = false
@@ -479,6 +502,7 @@ export async function runUrlFlow({
           source,
           settings: flags.slides,
           noCache: cacheState.mode === 'bypass',
+          mediaCache: ctx.mediaCache,
           env: io.env,
           timeoutMs: flags.timeoutMs,
           ytDlpPath: model.apiStatus.ytDlpPath,

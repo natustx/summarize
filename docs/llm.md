@@ -57,7 +57,7 @@ installed, auto mode can use local CLI models when `cli.enabled` is set (see `do
   - Prompts are wrapped in `<instructions>`, `<context>`, `<content>` tags.
   - When `--length` is numeric, we add `Output is X characters.` When `--language` is explicitly set, we add `Output should be <language>.`
 - `--no-cache`
-  - Bypass cache reads and writes (extracted content, transcripts, summaries).
+  - Bypass summary cache reads and writes only (LLM output). Extract/transcript caches still apply.
 - `--cache-stats`
   - Print cache stats and exit.
 - `--clear-cache`

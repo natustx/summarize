@@ -14,6 +14,7 @@ import { createThemeRenderer, resolveThemeNameFromSources, resolveTrueColor } fr
 import { formatVersionLine } from '../version.js'
 import { applyHelpStyle, buildSlidesProgram } from './help.js'
 import { writeVerbose } from './logging.js'
+import { createMediaCacheFromConfig } from './media-cache-state.js'
 import { resolveEnvState } from './run-env.js'
 import { renderSlidesInline, type SlidesRenderMode } from './slides-render.js'
 import { isRichTty, supportsColor } from './terminal.js'
@@ -124,6 +125,11 @@ export async function handleSlidesCliRequest({
   const timeoutRaw = typeof opts.timeout === 'string' && opts.timeout.trim() ? opts.timeout : '2m'
   const timeoutMs = parseDurationMs(timeoutRaw)
   const { config } = loadSummarizeConfig({ env: envForRun })
+  const mediaCache = await createMediaCacheFromConfig({
+    envForRun,
+    config,
+    noMediaCacheFlag: false,
+  })
   const themeName = resolveThemeNameFromSources({
     cli: opts.theme,
     env: envForRun.SUMMARIZE_THEME,
@@ -212,6 +218,7 @@ export async function handleSlidesCliRequest({
       source,
       settings: slidesSettings,
       noCache: opts.cache === false,
+      mediaCache,
       env: envForRun,
       timeoutMs,
       ytDlpPath: envState.ytDlpPath,

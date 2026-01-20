@@ -117,7 +117,7 @@ Configure the on-disk SQLite cache (extracted content, transcripts, summaries).
 Notes:
 
 - `cache.media` controls the **media file** cache (yt-dlp downloads).
-- `--no-cache` bypasses only the SQLite cache; use `--no-media-cache` for media.
+- `--no-cache` bypasses summary caching only (LLM output); extract/transcript caches still apply. Use `--no-media-cache` for media.
 - `verify`: `size` (default), `hash`, or `none`.
 
 ## UI theme

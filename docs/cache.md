@@ -75,7 +75,7 @@ Defaults: `enabled=true`, `maxMb=512`, `ttlDays=30`, `path` unset.
 
 ## CLI flags
 
-- `--no-cache`: bypass read + write.
+- `--no-cache`: bypass summary cache reads + writes (LLM output). Extract/transcript caches still apply.
 - `--cache-stats`: print cache stats and exit.
 - `--clear-cache`: delete cache DB (and WAL/SHM); must be used alone.
 

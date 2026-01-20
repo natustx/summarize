@@ -35,6 +35,8 @@ function makeContext(overrides: Partial<AssetSummaryContext>): AssetSummaryConte
     },
     trackedFetch: vi.fn(),
     cache: { mode: 'default', store: null, ttlMs: 0, maxBytes: 0, path: null },
+    summaryCacheBypass: false,
+    mediaCache: null,
     timeoutMs: 1234,
     forceSummary: false,
     stderr,

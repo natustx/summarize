@@ -482,7 +482,7 @@ export async function runCli(
   const cacheState: CacheState = await createCacheStateFromConfig({
     envForRun,
     config,
-    noCacheFlag,
+    noCacheFlag: false,
     transcriptNamespace,
   })
   const mediaCache = await createMediaCacheFromConfig({
@@ -665,6 +665,7 @@ export async function runCli(
       estimateCostUsd,
       llmCalls,
       cache: cacheState,
+      summaryCacheBypass: noCacheFlag,
       mediaCache,
       apiStatus: {
         xaiApiKey,
@@ -799,6 +800,7 @@ export async function runCli(
         promptOverride,
         lengthInstruction,
         languageInstruction,
+        summaryCacheBypass: noCacheFlag,
         maxOutputTokensArg,
         json,
         extractMode,

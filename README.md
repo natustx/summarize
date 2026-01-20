@@ -446,7 +446,7 @@ Media cache defaults:
 }
 ```
 
-Note: `--no-cache` bypasses the SQLite cache only. Use `--no-media-cache` to skip media files.
+Note: `--no-cache` bypasses summary caching only (LLM output). Extract/transcript caches still apply. Use `--no-media-cache` to skip media files.
 
 Precedence:
 

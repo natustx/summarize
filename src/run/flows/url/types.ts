@@ -46,6 +46,7 @@ export type UrlFlowFlags = {
   promptOverride?: string | null
   lengthInstruction?: string | null
   languageInstruction?: string | null
+  summaryCacheBypass: boolean
   maxOutputTokensArg: number | null
   json: boolean
   extractMode: boolean

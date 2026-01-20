@@ -301,6 +301,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
     estimateCostUsd: metrics.estimateCostUsd,
     llmCalls: metrics.llmCalls,
     cache,
+    summaryCacheBypass: false,
     mediaCache,
     apiStatus: {
       xaiApiKey,
@@ -342,6 +343,7 @@ export function createDaemonUrlFlowContext(args: DaemonUrlFlowContextArgs): UrlF
       promptOverride,
       lengthInstruction,
       languageInstruction,
+      summaryCacheBypass: false,
       maxOutputTokensArg,
       json: false,
       extractMode: extractOnly ?? false,

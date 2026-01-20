@@ -32,6 +32,8 @@
 - Media: route direct media URLs to the transcription pipeline and raise the local media limit to 2GB (#47, thanks @n0an).
 - Slides: render Slide X/Y labels and parse slide markers more robustly in streaming output.
 - Slides: progress updates during yt-dlp downloads and OSC progress mirrors slide extraction.
+- Slides: reuse the media cache for downloaded videos (even with `--no-cache`).
+- CLI: `--no-cache` now bypasses summary caching only; transcript/media caches still apply.
 - Chrome Side Panel chat: keep auto-scroll pinned while streaming when you’re already at the bottom.
 - Chrome Side Panel: scope streams/state per window so other windows don’t wipe active summaries.
 - Chrome Side Panel chat: support JSON agent replies with explicit SSE/JSON negotiation to avoid “stream ended” errors.

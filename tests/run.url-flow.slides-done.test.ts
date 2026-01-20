@@ -96,11 +96,16 @@ describe('runUrlFlow slides done hook', () => {
     }
 
     let doneResult: { ok: boolean; error?: string | null } | null = null
+    const mediaCache = {
+      get: vi.fn(async () => null),
+      put: vi.fn(async () => null),
+    }
 
     const ctx = createDaemonUrlFlowContext({
       env: { HOME: root, OPENAI_API_KEY: 'test' },
       fetchImpl,
       cache,
+      mediaCache,
       modelOverride: 'openai/gpt-5.2',
       promptOverride: null,
       lengthRaw: 'short',
@@ -122,6 +127,8 @@ describe('runUrlFlow slides done hook', () => {
 
     await waitForResult(() => doneResult)
     expect(doneResult?.ok).toBe(true)
+    const call = extractSlidesForSource.mock.calls[0]?.[0]
+    expect(call?.mediaCache).toBe(mediaCache)
   })
 
   it('emits error when slides extraction fails', async () => {

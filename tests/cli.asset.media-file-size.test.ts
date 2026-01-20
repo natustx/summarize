@@ -78,6 +78,8 @@ function makeContext(): AssetSummaryContext {
     estimateCostUsd: vi.fn(),
     llmCalls: [],
     cache: { mode: 'default', store: null, ttlMs: 0, maxBytes: 0, path: null },
+    summaryCacheBypass: false,
+    mediaCache: null,
     apiStatus: {
       xaiApiKey: null,
       apiKey: null,

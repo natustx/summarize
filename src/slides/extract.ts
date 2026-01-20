@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import type { ExtractedLinkContent } from '../content/index.js'
+import type { ExtractedLinkContent, MediaCache } from '../content/index.js'
 import { extractYouTubeVideoId, isDirectMediaUrl, isYouTubeUrl } from '../content/index.js'
 import { resolveExecutableInPath } from '../run/env.js'
 import type { SlideSettings } from './settings.js'
@@ -77,6 +77,10 @@ function resolveSlidesStreamFallback(env: Record<string, string | undefined>): b
   return raw === '1' || raw === 'true' || raw === 'yes'
 }
 
+function buildSlidesMediaCacheKey(url: string): string {
+  return `${url}#summarize-slides`
+}
+
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -105,6 +109,7 @@ type ExtractSlidesArgs = {
   source: SlideSource
   settings: SlideSettings
   noCache?: boolean
+  mediaCache?: MediaCache | null
   env: Record<string, string | undefined>
   timeoutMs: number
   ytDlpPath: string | null
@@ -206,6 +211,7 @@ export async function extractSlidesForSource({
   source,
   settings,
   noCache = false,
+  mediaCache = null,
   env,
   timeoutMs,
   ytDlpPath,
@@ -286,8 +292,17 @@ export async function extractSlidesForSource({
       const allowStreamFallback = resolveSlidesStreamFallback(env)
       let inputPath = source.url
       let inputCleanup: (() => Promise<void>) | null = null
+      const mediaCacheKey = mediaCache ? buildSlidesMediaCacheKey(source.url) : null
+      const cachedMedia = mediaCacheKey ? await mediaCache?.get({ url: mediaCacheKey }) : null
 
-      if (source.kind === 'youtube') {
+      if (cachedMedia) {
+        inputPath = cachedMedia.filePath
+        const detail =
+          typeof cachedMedia.sizeBytes === 'number'
+            ? `(${formatBytes(cachedMedia.sizeBytes)})`
+            : undefined
+        reportSlidesProgress?.('using cached video', P_DOWNLOAD_VIDEO, detail)
+      } else if (source.kind === 'youtube') {
         if (!ytDlpPath) {
           throw new Error('Slides for YouTube require yt-dlp (set YT_DLP_PATH or install yt-dlp).')
         }
@@ -307,7 +322,14 @@ export async function extractSlidesForSource({
               reportSlidesProgress?.('downloading video', mapped, detail)
             },
           })
-          inputPath = downloaded.filePath
+          const cached = mediaCacheKey
+            ? await mediaCache?.put({
+                url: mediaCacheKey,
+                filePath: downloaded.filePath,
+                filename: path.basename(downloaded.filePath),
+              })
+            : null
+          inputPath = cached?.filePath ?? downloaded.filePath
           inputCleanup = downloaded.cleanup
           logSlidesTiming(`yt-dlp download (detect+extract, format=${format})`, downloadStartedAt)
         } catch (error) {
@@ -350,7 +372,14 @@ export async function extractSlidesForSource({
                 reportSlidesProgress?.('downloading video', mapped, detail)
               },
             })
-            inputPath = downloaded.filePath
+            const cached = mediaCacheKey
+              ? await mediaCache?.put({
+                  url: mediaCacheKey,
+                  filePath: downloaded.filePath,
+                  filename: path.basename(downloaded.filePath),
+                })
+              : null
+            inputPath = cached?.filePath ?? downloaded.filePath
             inputCleanup = downloaded.cleanup
             logSlidesTiming(`yt-dlp download (direct source, format=${format})`, downloadStartedAt)
           } catch (error) {
@@ -382,7 +411,14 @@ export async function extractSlidesForSource({
                 reportSlidesProgress?.('downloading video', mapped, detail)
               },
             })
-            inputPath = downloaded.filePath
+            const cached = mediaCacheKey
+              ? await mediaCache?.put({
+                  url: mediaCacheKey,
+                  filePath: downloaded.filePath,
+                  filename: path.basename(downloaded.filePath),
+                })
+              : null
+            inputPath = cached?.filePath ?? downloaded.filePath
             inputCleanup = downloaded.cleanup
             logSlidesTiming('download direct video (detect+extract)', downloadStartedAt)
           } catch (error) {

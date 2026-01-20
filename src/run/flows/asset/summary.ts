@@ -256,6 +256,7 @@ export type AssetSummaryContext = {
   estimateCostUsd: () => Promise<number | null>
   llmCalls: LlmCall[]
   cache: CacheState
+  summaryCacheBypass: boolean
   mediaCache: MediaCache | null
   apiStatus: {
     xaiApiKey: string | null
@@ -451,7 +452,8 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
     }
   })()
 
-  const cacheStore = ctx.cache.mode === 'default' ? ctx.cache.store : null
+  const cacheStore =
+    ctx.cache.mode === 'default' && !ctx.summaryCacheBypass ? ctx.cache.store : null
   const contentBlock = extractTaggedBlock(promptText, 'content')
   const contentHash =
     cacheStore && contentBlock && contentBlock.trim().length > 0

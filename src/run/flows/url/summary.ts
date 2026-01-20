@@ -681,7 +681,8 @@ export async function summarizeExtractedUrl({
     ]
   })()
 
-  const cacheStore = cacheState.mode === 'default' ? cacheState.store : null
+  const cacheStore =
+    cacheState.mode === 'default' && !flags.summaryCacheBypass ? cacheState.store : null
   const contentHash = cacheStore ? hashString(normalizeContentForHash(extracted.content)) : null
   const promptHash = cacheStore ? buildPromptHash(prompt) : null
   const lengthKey = buildLengthKey(flags.lengthArg)
@@ -694,9 +695,16 @@ export async function summarizeExtractedUrl({
 
   const isTweet = extracted.siteName?.toLowerCase() === 'x' || isTwitterStatusUrl(extracted.url)
   const isYouTube = extracted.siteName === 'YouTube' || isYouTubeUrl(url)
+  const hasMedia =
+    Boolean(extracted.video) ||
+    (extracted.transcriptSource != null && extracted.transcriptSource !== 'unavailable') ||
+    (typeof extracted.mediaDurationSeconds === 'number' && extracted.mediaDurationSeconds > 0) ||
+    extracted.isVideoOnly === true
   const autoBypass = ctx.model.isFallbackModel && !ctx.model.isNamedModelSelection
   const canBypassShortContent =
     (autoBypass || isTweet) &&
+    !flags.slides &&
+    !hasMedia &&
     flags.streamMode !== 'on' &&
     !isYouTube &&
     shouldBypassShortContentSummary({
