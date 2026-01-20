@@ -233,7 +233,8 @@ See: https://github.com/openai/whisper for setup details`)
       ctx.stderr,
       ctx.verbose,
       `transcription done media file: ${extracted.diagnostics?.transcript?.provider ?? 'unknown'}`,
-      false
+      false,
+      ctx.envForRun
     )
 
     // If extract mode, output the transcript directly without LLM summarization

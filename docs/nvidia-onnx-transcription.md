@@ -10,7 +10,7 @@ Summarize can now run local transcription through NVIDIA's Parakeet-TDT 0.6B-v3 
 
 ## How to enable
 
-1) Choose a CLI capable of running the ONNX models (e.g. `sherpa-onnx` or a custom wrapper) and make sure it emits the transcribed text on stdout. The CLI must accept a single WAV input path. **Summarize now downloads the Hugging Face model files automatically on first use** into the cache (see below), so your command template can reference the provided paths.
+1) Install a CLI capable of running the ONNX models (e.g. `sherpa-onnx` or a custom wrapper). Homebrew may not have a formula; use upstream binaries or build from source if needed. The CLI must emit the transcribed text on stdout and accept a single WAV input path. **Summarize now downloads the Hugging Face model files automatically on first use** into the cache (see below), so your command template can reference the provided paths.
 2) Set one (or both) command templates:
 
 - Recommended (no shell): provide a JSON array (command + args):

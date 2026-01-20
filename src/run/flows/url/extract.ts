@@ -89,11 +89,13 @@ export function logExtractionDiagnostics({
   stderr,
   verbose,
   verboseColor,
+  env,
 }: {
   extracted: ExtractedLinkContent
   stderr: NodeJS.WritableStream
   verbose: boolean
   verboseColor: boolean
+  env?: Record<string, string | undefined>
 }) {
   writeVerbose(
     stderr,
@@ -103,7 +105,8 @@ export function logExtractionDiagnostics({
     )} title=${formatOptionalString(extracted.title)} transcriptSource=${formatOptionalString(
       extracted.transcriptSource
     )}`,
-    verboseColor
+    verboseColor,
+    env
   )
   writeVerbose(
     stderr,
@@ -111,7 +114,8 @@ export function logExtractionDiagnostics({
     `extract stats characters=${extracted.totalCharacters} words=${extracted.wordCount} transcriptCharacters=${formatOptionalNumber(
       extracted.transcriptCharacters
     )} transcriptLines=${formatOptionalNumber(extracted.transcriptLines)}`,
-    verboseColor
+    verboseColor,
+    env
   )
   writeVerbose(
     stderr,
@@ -119,7 +123,8 @@ export function logExtractionDiagnostics({
     `extract firecrawl attempted=${extracted.diagnostics.firecrawl.attempted} used=${extracted.diagnostics.firecrawl.used} notes=${formatOptionalString(
       extracted.diagnostics.firecrawl.notes ?? null
     )}`,
-    verboseColor
+    verboseColor,
+    env
   )
   writeVerbose(
     stderr,
@@ -127,7 +132,8 @@ export function logExtractionDiagnostics({
     `extract markdown requested=${extracted.diagnostics.markdown.requested} used=${extracted.diagnostics.markdown.used} provider=${formatOptionalString(
       extracted.diagnostics.markdown.provider ?? null
     )} notes=${formatOptionalString(extracted.diagnostics.markdown.notes ?? null)}`,
-    verboseColor
+    verboseColor,
+    env
   )
   writeVerbose(
     stderr,
@@ -139,6 +145,7 @@ export function logExtractionDiagnostics({
         ? extracted.diagnostics.transcript.attemptedProviders.join(',')
         : 'none'
     } notes=${formatOptionalString(extracted.diagnostics.transcript.notes ?? null)}`,
-    verboseColor
+    verboseColor,
+    env
   )
 }

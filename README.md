@@ -247,6 +247,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 - `--stream auto|on|off`: stream LLM output (`auto` = TTY only; disabled in `--json` mode)
 - `--plain`: keep raw output (no ANSI/OSC Markdown rendering)
 - `--no-color`: disable ANSI colors
+- `--theme <name>`: CLI theme (`aurora`, `ember`, `moss`, `mono`)
 - `--format md|text`: website/file content format (default `text`)
 - `--markdown-mode off|auto|llm|readability`: HTML -> Markdown mode (default `readability`)
 - `--preprocess off|auto|always`: controls `uvx markitdown` usage (default `auto`)
@@ -360,6 +361,7 @@ direct media URLs (and embedded media) through Whisper first. Prefers local `whi
 Summarize can use NVIDIA Parakeet/Canary ONNX models via a local CLI you provide. Auto selection (default) prefers ONNX when configured.
 
 - Setup helper: `summarize transcriber setup`
+- Install `sherpa-onnx` from upstream binaries/build (Homebrew may not have a formula)
 - Auto selection: set `SUMMARIZE_ONNX_PARAKEET_CMD` or `SUMMARIZE_ONNX_CANARY_CMD` (no flag needed)
 - Force a model: `--transcriber parakeet|canary|whisper|auto`
 - Docs: `docs/nvidia-onnx-transcription.md`
@@ -408,7 +410,8 @@ Supported keys today:
 
 ```json
 {
-  "model": { "id": "openai/gpt-5-mini" }
+  "model": { "id": "openai/gpt-5-mini" },
+  "ui": { "theme": "ember" }
 }
 ```
 
@@ -426,6 +429,7 @@ Also supported:
 - `model.rules` (customize candidates / ordering)
 - `models` (define presets selectable via `--model <preset>`)
 - `media.videoMode: "auto"|"transcript"|"understand"`
+- `ui.theme: "aurora"|"ember"|"moss"|"mono"`
 - `openai.useChatCompletions: true` (force OpenAI-compatible chat completions)
 
 Note: the config is parsed leniently (JSON5), but comments are not allowed. Unknown keys are ignored.
@@ -436,6 +440,13 @@ Precedence:
 2) `SUMMARIZE_MODEL`
 3) `~/.summarize/config.json`
 4) default (`auto`)
+
+Theme precedence:
+
+1) `--theme`
+2) `SUMMARIZE_THEME`
+3) `~/.summarize/config.json` (`ui.theme`)
+4) default (`aurora`)
 
 ### Environment variables
 
@@ -451,6 +462,12 @@ Set the key matching your chosen `--model`:
 OpenAI-compatible chat completions toggle:
 
 - `OPENAI_USE_CHAT_COMPLETIONS=1` (or set `openai.useChatCompletions` in config)
+
+UI theme:
+
+- `SUMMARIZE_THEME=aurora|ember|moss|mono`
+- `SUMMARIZE_TRUECOLOR=1` (force 24-bit ANSI)
+- `SUMMARIZE_NO_TRUECOLOR=1` (disable 24-bit ANSI)
 
 OpenRouter (OpenAI-compatible):
 

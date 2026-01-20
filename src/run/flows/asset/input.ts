@@ -10,8 +10,12 @@ import {
 import { formatBytes } from '../../../tty/format.js'
 import { startOscProgress } from '../../../tty/osc-progress.js'
 import { startSpinner } from '../../../tty/spinner.js'
+import {
+  createThemeRenderer,
+  resolveThemeNameFromSources,
+  resolveTrueColor,
+} from '../../../tty/theme.js'
 import { assertAssetMediaTypeSupported } from '../../attachments.js'
-import { ansi } from '../../terminal.js'
 import type { SummarizeAssetArgs } from './summary.js'
 
 /**
@@ -45,6 +49,18 @@ const TRANSCRIBABLE_EXTENSIONS = new Set([
   '.mpeg',
   '.mpg',
 ])
+
+const createProgressTheme = (
+  envForRun: Record<string, string | undefined> | undefined,
+  enabled: boolean
+) => {
+  const env = envForRun ?? {}
+  return createThemeRenderer({
+    themeName: resolveThemeNameFromSources({ env: env.SUMMARIZE_THEME }),
+    enabled,
+    trueColor: resolveTrueColor(env),
+  })
+}
 
 function normalizePathForExtension(value: string): string {
   try {
@@ -110,8 +126,9 @@ async function runMediaTranscription({
   sizeLabel: string | null
   spinner: ReturnType<typeof startSpinner>
 }): Promise<void> {
-  const dim = (value: string) => ansi('90', value, ctx.progressEnabled)
-  const accent = (value: string) => ansi('36', value, ctx.progressEnabled)
+  const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
+  const dim = (value: string) => theme.dim(value)
+  const accent = (value: string) => theme.accent(value)
   const meta = formatTranscriptionMeta({ filename, sizeLabel, dim })
 
   if (ctx.progressEnabled) {
@@ -136,6 +153,7 @@ async function runMediaTranscription({
 
 export type AssetInputContext = {
   env: Record<string, string | undefined>
+  envForRun: Record<string, string | undefined>
   stderr: NodeJS.WritableStream
   progressEnabled: boolean
   timeoutMs: number
@@ -159,6 +177,7 @@ export async function handleFileInput(
   if (inputTarget.kind !== 'file') return false
 
   let sizeLabel: string | null = null
+  const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
   try {
     const stat = await fs.stat(inputTarget.filePath)
     if (stat.isFile()) {
@@ -179,6 +198,7 @@ export async function handleFileInput(
     text: sizeLabel ? `Loading file (${sizeLabel})…` : 'Loading file…',
     enabled: ctx.progressEnabled,
     stream: ctx.stderr,
+    color: theme.palette.spinner,
   })
   let stopped = false
   const stopProgress = () => {
@@ -216,8 +236,8 @@ export async function handleFileInput(
     const handler =
       isTranscribable && ctx.summarizeMediaFile ? ctx.summarizeMediaFile : ctx.summarizeAsset
 
-    const dim = (value: string) => ansi('90', value, ctx.progressEnabled)
-    const accent = (value: string) => ansi('36', value, ctx.progressEnabled)
+    const dim = (value: string) => theme.dim(value)
+    const accent = (value: string) => theme.accent(value)
 
     if (ctx.progressEnabled) {
       const mt = loaded.attachment.mediaType
@@ -261,6 +281,7 @@ export async function withUrlAsset(
   // For remote media URLs (by extension), route directly to summarizeMediaFile.
   // This avoids the 50MB limit in loadRemoteAsset - yt-dlp handles streaming download.
   if (isTranscribableExtension(url) && ctx.summarizeMediaFile) {
+    const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
     const filename = (() => {
       try {
         return path.basename(new URL(url).pathname) || 'media'
@@ -279,6 +300,7 @@ export async function withUrlAsset(
       text: `Transcribing ${filename}…`,
       enabled: ctx.progressEnabled,
       stream: ctx.stderr,
+      color: theme.palette.spinner,
     })
     let stopped = false
     const stopProgress = () => {
@@ -311,6 +333,7 @@ export async function withUrlAsset(
   const kind = await classifyUrl({ url, fetchImpl: ctx.trackedFetch, timeoutMs: ctx.timeoutMs })
   if (kind.kind !== 'asset') return false
 
+  const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
   const stopOscProgress = startOscProgress({
     label: 'Downloading file',
     indeterminate: true,
@@ -322,6 +345,7 @@ export async function withUrlAsset(
     text: 'Downloading file…',
     enabled: ctx.progressEnabled,
     stream: ctx.stderr,
+    color: theme.palette.spinner,
   })
   let stopped = false
   const stopProgress = () => {
@@ -364,8 +388,9 @@ export async function handleUrlAsset(
 ): Promise<boolean> {
   // Media URL handling is now in withUrlAsset
   return withUrlAsset(ctx, url, isYoutubeUrl, async ({ loaded, spinner }) => {
-    const dim = (value: string) => ansi('90', value, ctx.progressEnabled)
-    const accent = (value: string) => ansi('36', value, ctx.progressEnabled)
+    const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
+    const dim = (value: string) => theme.dim(value)
+    const accent = (value: string) => theme.accent(value)
     if (ctx.progressEnabled) spinner.setText(`Summarizing ${dim('file')}…`)
     await ctx.summarizeAsset({
       sourceKind: 'asset-url',

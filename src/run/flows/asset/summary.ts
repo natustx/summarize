@@ -58,14 +58,19 @@ function shouldBypassShortContentSummary({
   ctx,
   textContent,
 }: {
-  ctx: Pick<AssetSummaryContext, 'forceSummary' | 'lengthArg'>
+  ctx: Pick<AssetSummaryContext, 'forceSummary' | 'lengthArg' | 'maxOutputTokensArg' | 'json'>
   textContent: { content: string } | null
 }): boolean {
   if (ctx.forceSummary) return false
   if (!textContent?.content) return false
   const targetCharacters = resolveTargetCharacters(ctx.lengthArg, SUMMARY_LENGTH_TARGET_CHARACTERS)
   if (!Number.isFinite(targetCharacters) || targetCharacters <= 0) return false
-  return textContent.content.length <= targetCharacters
+  if (textContent.content.length > targetCharacters) return false
+  if (!ctx.json && typeof ctx.maxOutputTokensArg === 'number') {
+    const tokenCount = countTokens(textContent.content)
+    if (tokenCount > ctx.maxOutputTokensArg) return false
+  }
+  return true
 }
 
 async function outputBypassedAssetSummary({
@@ -143,6 +148,7 @@ async function outputBypassedAssetSummary({
       const costUsd = await ctx.estimateCostUsd()
       writeFinishLine({
         stderr: ctx.stderr,
+        env: ctx.envForRun,
         elapsedMs: Date.now() - ctx.runStartedAtMs,
         elapsedLabel: null,
         model: null,
@@ -177,13 +183,16 @@ async function outputBypassedAssetSummary({
     ctx.stdout.write('\n')
   }
   ctx.restoreProgressAfterStdout?.()
-  ctx.writeViaFooter([...assetFooterParts, footerLabel])
+  if (assetFooterParts.length > 0) {
+    ctx.writeViaFooter([...assetFooterParts, footerLabel])
+  }
 
   const report = ctx.shouldComputeReport ? await ctx.buildReport() : null
   if (ctx.metricsEnabled && report) {
     const costUsd = await ctx.estimateCostUsd()
     writeFinishLine({
       stderr: ctx.stderr,
+      env: ctx.envForRun,
       elapsedMs: Date.now() - ctx.runStartedAtMs,
       elapsedLabel: null,
       model: null,
@@ -312,7 +321,11 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
         : ('file' as const)
   const requiresVideoUnderstanding = kind === 'video' && ctx.videoMode !== 'transcript'
 
-  if (shouldBypassShortContentSummary({ ctx, textContent })) {
+  if (
+    ctx.isFallbackModel &&
+    !ctx.isNamedModelSelection &&
+    shouldBypassShortContentSummary({ ctx, textContent })
+  ) {
     await outputBypassedAssetSummary({
       ctx,
       args,
@@ -464,7 +477,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       })
       const cached = cacheStore.getText('summary', key)
       if (!cached) continue
-      writeVerbose(ctx.stderr, ctx.verbose, 'cache hit summary', ctx.verboseColor)
+      writeVerbose(ctx.stderr, ctx.verbose, 'cache hit summary', ctx.verboseColor, ctx.envForRun)
       args.onModelChosen?.(attempt.userModelId)
       summaryResult = {
         summary: cached,
@@ -478,7 +491,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
     }
   }
   if (cacheChecked && !summaryFromCache) {
-    writeVerbose(ctx.stderr, ctx.verbose, 'cache miss summary', ctx.verboseColor)
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache miss summary', ctx.verboseColor, ctx.envForRun)
   }
 
   let lastError: unknown = null
@@ -497,7 +510,8 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
           ctx.stderr,
           ctx.verbose,
           `auto skip ${attempt.userModelId}: missing ${attempt.requiredEnv}`,
-          ctx.verboseColor
+          ctx.verboseColor,
+          ctx.envForRun
         )
       },
       onAutoFailure: (attempt, error) => {
@@ -507,7 +521,8 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
           `auto failed ${attempt.userModelId}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          ctx.verboseColor
+          ctx.verboseColor,
+          ctx.envForRun
         )
       },
       onFixedModelError: (attempt, error) => {
@@ -587,7 +602,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       languageKey,
     })
     cacheStore.setText('summary', key, summaryResult.summary, ctx.cache.ttlMs)
-    writeVerbose(ctx.stderr, ctx.verbose, 'cache write summary', ctx.verboseColor)
+    writeVerbose(ctx.stderr, ctx.verbose, 'cache write summary', ctx.verboseColor, ctx.envForRun)
   }
 
   const { summary, summaryAlreadyPrinted, modelMeta, maxOutputTokensForCall } = summaryResult
@@ -665,6 +680,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
       const costUsd = await ctx.estimateCostUsd()
       writeFinishLine({
         stderr: ctx.stderr,
+        env: ctx.envForRun,
         elapsedMs: Date.now() - ctx.runStartedAtMs,
         elapsedLabel: summaryFromCache ? 'Cached' : null,
         model: usedAttempt.userModelId,
@@ -709,6 +725,7 @@ export async function summarizeAsset(ctx: AssetSummaryContext, args: SummarizeAs
     const costUsd = await ctx.estimateCostUsd()
     writeFinishLine({
       stderr: ctx.stderr,
+      env: ctx.envForRun,
       elapsedMs: Date.now() - ctx.runStartedAtMs,
       elapsedLabel: summaryFromCache ? 'Cached' : null,
       model: usedAttempt.userModelId,

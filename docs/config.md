@@ -36,6 +36,13 @@ For prompt:
 1. CLI flag `--prompt` / `--prompt-file`
 2. Config file `prompt`
 3. Built-in default prompt
+
+For UI theme:
+
+1. CLI flag `--theme`
+2. Env `SUMMARIZE_THEME`
+3. Config file `ui.theme`
+4. Built-in default (`aurora`)
 ## Format
 
 `~/.summarize/config.json`:
@@ -44,7 +51,8 @@ For prompt:
 {
   "model": { "id": "google/gemini-3-flash-preview" },
   "output": { "language": "auto" },
-  "prompt": "Explain like I am five."
+  "prompt": "Explain like I am five.",
+  "ui": { "theme": "ember" }
 }
 ```
 
@@ -96,6 +104,16 @@ Configure the on-disk SQLite cache (extracted content, transcripts, summaries).
     "ttlDays": 30,
     "path": "~/.summarize/cache.sqlite"
   }
+}
+```
+
+## UI theme
+
+Set a default CLI theme:
+
+```json
+{
+  "ui": { "theme": "moss" }
 }
 ```
 

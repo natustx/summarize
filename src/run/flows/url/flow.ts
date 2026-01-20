@@ -16,6 +16,11 @@ import {
 } from '../../../slides/index.js'
 import { createOscProgressController } from '../../../tty/osc-progress.js'
 import { startSpinner } from '../../../tty/spinner.js'
+import {
+  createThemeRenderer,
+  resolveThemeNameFromSources,
+  resolveTrueColor,
+} from '../../../tty/theme.js'
 import { createWebsiteProgress } from '../../../tty/website-progress.js'
 import { assertAssetMediaTypeSupported } from '../../attachments.js'
 import { readTweetWithBird } from '../../bird.js'
@@ -29,7 +34,6 @@ import {
   formatUSD,
 } from '../../format.js'
 import { writeVerbose } from '../../logging.js'
-import { ansi } from '../../terminal.js'
 import {
   deriveExtractionUi,
   fetchLinkContentWithBirdTip,
@@ -54,6 +58,11 @@ export async function runUrlFlow({
   }
 
   const { io, flags, model, cache: cacheState, hooks } = ctx
+  const theme = createThemeRenderer({
+    themeName: resolveThemeNameFromSources({ env: io.envForRun.SUMMARIZE_THEME }),
+    enabled: flags.verboseColor,
+    trueColor: resolveTrueColor(io.envForRun),
+  })
 
   const markdown = createMarkdownConverters(ctx, { isYoutubeUrl })
   if (flags.firecrawlMode === 'always' && !model.apiStatus.firecrawlConfigured) {
@@ -68,7 +77,8 @@ export async function runUrlFlow({
         ? flags.lengthArg.preset
         : `${flags.lengthArg.maxCharacters} chars`
     } maxOutputTokens=${formatOptionalNumber(flags.maxOutputTokensArg)} retries=${flags.retries} json=${flags.json} extract=${flags.extractMode} format=${flags.format} preprocess=${flags.preprocessMode} markdownMode=${flags.markdownMode} model=${model.requestedModelLabel} videoMode=${flags.videoMode} timestamps=${flags.transcriptTimestamps ? 'on' : 'off'} stream=${flags.streamingEnabled ? 'on' : 'off'} plain=${flags.plain}`,
-    flags.verboseColor
+    flags.verboseColor,
+    io.envForRun
   )
   writeVerbose(
     io.stderr,
@@ -76,19 +86,22 @@ export async function runUrlFlow({
     `configFile path=${formatOptionalString(flags.configPath)} model=${formatOptionalString(
       flags.configModelLabel
     )}`,
-    flags.verboseColor
+    flags.verboseColor,
+    io.envForRun
   )
   writeVerbose(
     io.stderr,
     flags.verbose,
     `env xaiKey=${Boolean(model.apiStatus.xaiApiKey)} openaiKey=${Boolean(model.apiStatus.apiKey)} zaiKey=${Boolean(model.apiStatus.zaiApiKey)} googleKey=${model.apiStatus.googleConfigured} anthropicKey=${model.apiStatus.anthropicConfigured} openrouterKey=${model.apiStatus.openrouterConfigured} apifyToken=${Boolean(model.apiStatus.apifyToken)} firecrawlKey=${model.apiStatus.firecrawlConfigured}`,
-    flags.verboseColor
+    flags.verboseColor,
+    io.envForRun
   )
   writeVerbose(
     io.stderr,
     flags.verbose,
     `markdown htmlRequested=${markdown.markdownRequested} transcriptRequested=${markdown.transcriptMarkdownRequested} provider=${markdown.markdownProvider}`,
-    flags.verboseColor
+    flags.verboseColor,
+    io.envForRun
   )
 
   const firecrawlApiKey = model.apiStatus.firecrawlApiKey
@@ -105,7 +118,7 @@ export async function runUrlFlow({
         readTweetWithBird({ url, timeoutMs, env: io.env })
     : null
 
-  writeVerbose(io.stderr, flags.verbose, 'extract start', flags.verboseColor)
+  writeVerbose(io.stderr, flags.verbose, 'extract start', flags.verboseColor, io.envForRun)
   const oscProgress = createOscProgressController({
     label: 'Fetching website',
     env: io.env,
@@ -117,6 +130,7 @@ export async function runUrlFlow({
     text: 'Fetching website (connecting)…',
     enabled: flags.progressEnabled,
     stream: io.stderr,
+    color: theme.palette.spinner,
   })
   const handleSignal = () => {
     try {
@@ -238,10 +252,22 @@ export async function runUrlFlow({
       if (cacheKey && cacheStore) {
         const cached = cacheStore.getJson<ExtractedLinkContent>('extract', cacheKey)
         if (cached) {
-          writeVerbose(io.stderr, flags.verbose, 'cache hit extract', flags.verboseColor)
+          writeVerbose(
+            io.stderr,
+            flags.verbose,
+            'cache hit extract',
+            flags.verboseColor,
+            io.envForRun
+          )
           return cached
         }
-        writeVerbose(io.stderr, flags.verbose, 'cache miss extract', flags.verboseColor)
+        writeVerbose(
+          io.stderr,
+          flags.verbose,
+          'cache miss extract',
+          flags.verboseColor,
+          io.envForRun
+        )
       }
       try {
         const extracted = await fetchLinkContentWithBirdTip({
@@ -252,7 +278,13 @@ export async function runUrlFlow({
         })
         if (cacheKey && cacheStore) {
           cacheStore.setJson('extract', cacheKey, extracted, cacheState.ttlMs)
-          writeVerbose(io.stderr, flags.verbose, 'cache write extract', flags.verboseColor)
+          writeVerbose(
+            io.stderr,
+            flags.verbose,
+            'cache write extract',
+            flags.verboseColor,
+            io.envForRun
+          )
         }
         return extracted
       } catch (err) {
@@ -267,7 +299,8 @@ export async function runUrlFlow({
           io.stderr,
           flags.verbose,
           `extract fallback url-only (${(err as Error).message ?? String(err)})`,
-          flags.verboseColor
+          flags.verboseColor,
+          io.envForRun
         )
         return {
           content: '',
@@ -392,14 +425,26 @@ export async function runUrlFlow({
             ? await validateSlidesCache({ cached, source, settings: flags.slides })
             : null
           if (validated) {
-            writeVerbose(io.stderr, flags.verbose, 'cache hit slides', flags.verboseColor)
+            writeVerbose(
+              io.stderr,
+              flags.verbose,
+              'cache hit slides',
+              flags.verboseColor,
+              io.envForRun
+            )
             slidesExtracted = validated
             resolveTimeline(validated)
             ctx.hooks.onSlidesExtracted?.(slidesExtracted)
             ctx.hooks.onSlidesProgress?.('Slides: cached 100%')
             return slidesExtracted
           }
-          writeVerbose(io.stderr, flags.verbose, 'cache miss slides', flags.verboseColor)
+          writeVerbose(
+            io.stderr,
+            flags.verbose,
+            'cache miss slides',
+            flags.verboseColor,
+            io.envForRun
+          )
         }
         if (flags.progressEnabled) {
           spinner.setText('Extracting slides…')
@@ -408,7 +453,13 @@ export async function runUrlFlow({
         // Prefer indeterminate progress until we get real percentage updates from the slide pipeline.
         ctx.hooks.onSlidesProgress?.('Slides: extracting')
         const onSlidesLog = (message: string) => {
-          writeVerbose(io.stderr, flags.verbose, `slides ${message}`, flags.verboseColor)
+          writeVerbose(
+            io.stderr,
+            flags.verbose,
+            `slides ${message}`,
+            flags.verboseColor,
+            io.envForRun
+          )
         }
         slidesExtracted = await extractSlidesForSource({
           source,
@@ -436,7 +487,13 @@ export async function runUrlFlow({
           )
           if (slidesCacheKey && cacheStore) {
             cacheStore.setJson('slides', slidesCacheKey, slidesExtracted, cacheState.ttlMs)
-            writeVerbose(io.stderr, flags.verbose, 'cache write slides', flags.verboseColor)
+            writeVerbose(
+              io.stderr,
+              flags.verbose,
+              'cache write slides',
+              flags.verboseColor,
+              io.envForRun
+            )
           }
         }
         if (flags.progressEnabled) {
@@ -457,8 +514,8 @@ export async function runUrlFlow({
     }
 
     const formatSummaryProgress = (modelId?: string | null) => {
-      const dim = (value: string) => ansi('90', value, flags.verboseColor)
-      const accent = (value: string) => ansi('36', value, flags.verboseColor)
+      const dim = (value: string) => theme.dim(value)
+      const accent = (value: string) => theme.accent(value)
       const sentLabel = `${dim('sent ')}${extractionUi.contentSizeLabel}${extractionUi.viaSourceLabel}`
       const modelLabel = modelId ? `${dim('model: ')}${accent(modelId)}` : ''
       const meta = modelLabel ? `${sentLabel}${dim(', ')}${modelLabel}` : sentLabel
@@ -484,6 +541,7 @@ export async function runUrlFlow({
       stderr: io.stderr,
       verbose: flags.verbose,
       verboseColor: flags.verboseColor,
+      env: io.envForRun,
     })
     const transcriptCacheStatus = extracted.diagnostics?.transcript?.cacheStatus
     if (transcriptCacheStatus && transcriptCacheStatus !== 'unknown') {
@@ -491,7 +549,8 @@ export async function runUrlFlow({
         io.stderr,
         flags.verbose,
         `cache ${transcriptCacheStatus} transcript`,
-        flags.verboseColor
+        flags.verboseColor,
+        io.envForRun
       )
     }
 
@@ -512,7 +571,8 @@ export async function runUrlFlow({
           io.stderr,
           flags.verbose,
           `video-only page detected; switching to YouTube URL ${extracted.video.url}`,
-          flags.verboseColor
+          flags.verboseColor,
+          io.envForRun
         )
         if (flags.progressEnabled) {
           spinner.setText('Video-only page: fetching YouTube transcript…')
@@ -570,7 +630,13 @@ export async function runUrlFlow({
       void runSlidesExtraction().catch((error) => {
         const message = error instanceof Error ? error.message : String(error)
         ctx.hooks.onSlidesProgress?.(`Slides: failed (${message})`)
-        writeVerbose(io.stderr, flags.verbose, `slides failed: ${message}`, flags.verboseColor)
+        writeVerbose(
+          io.stderr,
+          flags.verbose,
+          `slides failed: ${message}`,
+          flags.verboseColor,
+          io.envForRun
+        )
       })
     }
 

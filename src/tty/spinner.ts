@@ -4,10 +4,12 @@ export function startSpinner({
   text,
   enabled,
   stream,
+  color,
 }: {
   text: string
   enabled: boolean
   stream: NodeJS.WritableStream
+  color?: string
 }): {
   stop: () => void
   clear: () => void
@@ -88,7 +90,7 @@ export function startSpinner({
     stream: oraStream,
     // Match Sweetistics CLI vibe; keep it clean.
     spinner: 'dots12',
-    color: 'cyan',
+    color: color ?? 'cyan',
     discardStdin: true,
   }).start()
 

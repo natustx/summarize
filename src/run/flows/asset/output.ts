@@ -99,6 +99,7 @@ export async function outputExtractedAsset({
       const costUsd = await hooks.estimateCostUsd()
       writeFinishLine({
         stderr: io.stderr,
+        env: io.envForRun,
         elapsedMs: Date.now() - flags.runStartedAtMs,
         label: finishLabel,
         model: null,
@@ -137,6 +138,7 @@ export async function outputExtractedAsset({
     const costUsd = await hooks.estimateCostUsd()
     writeFinishLine({
       stderr: io.stderr,
+      env: io.envForRun,
       elapsedMs: Date.now() - flags.runStartedAtMs,
       label: finishLabel,
       model: null,

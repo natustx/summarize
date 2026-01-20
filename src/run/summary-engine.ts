@@ -223,7 +223,13 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
       timeoutMs: deps.timeoutMs,
     })
     if (modelResolution.note && deps.verbose) {
-      writeVerbose(deps.stderr, deps.verbose, modelResolution.note, deps.verboseColor)
+      writeVerbose(
+        deps.stderr,
+        deps.verbose,
+        modelResolution.note,
+        deps.verboseColor,
+        deps.envForRun
+      )
     }
     const parsedModelEffective = parseGatewayStyleModelId(modelResolution.modelId)
     const streamingEnabledForCall =
@@ -279,6 +285,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           verbose: deps.verbose,
           color: deps.verboseColor,
           modelId: parsedModelEffective.canonical,
+          env: deps.envForRun,
         }),
       })
       deps.llmCalls.push({
@@ -337,7 +344,8 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           deps.stderr,
           deps.verbose,
           `Streaming timed out for ${parsedModelEffective.canonical}; falling back to non-streaming.`,
-          deps.verboseColor
+          deps.verboseColor,
+          deps.envForRun
         )
         const result = await summarizeWithModelId({
           modelId: parsedModelEffective.canonical,
@@ -358,6 +366,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
             verbose: deps.verbose,
             color: deps.verboseColor,
             modelId: parsedModelEffective.canonical,
+            env: deps.envForRun,
           }),
         })
         deps.llmCalls.push({
@@ -376,7 +385,8 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
           deps.stderr,
           deps.verbose,
           `Google model ${parsedModelEffective.canonical} rejected streamGenerateContent; falling back to non-streaming.`,
-          deps.verboseColor
+          deps.verboseColor,
+          deps.envForRun
         )
         const result = await summarizeWithModelId({
           modelId: parsedModelEffective.canonical,
@@ -396,6 +406,7 @@ export function createSummaryEngine(deps: SummaryEngineDeps) {
             verbose: deps.verbose,
             color: deps.verboseColor,
             modelId: parsedModelEffective.canonical,
+            env: deps.envForRun,
           }),
         })
         deps.llmCalls.push({

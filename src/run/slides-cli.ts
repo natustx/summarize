@@ -10,6 +10,7 @@ import {
 } from '../slides/index.js'
 import { createOscProgressController } from '../tty/osc-progress.js'
 import { startSpinner } from '../tty/spinner.js'
+import { createThemeRenderer, resolveThemeNameFromSources, resolveTrueColor } from '../tty/theme.js'
 import { formatVersionLine } from '../version.js'
 import { applyHelpStyle, buildSlidesProgram } from './help.js'
 import { writeVerbose } from './logging.js'
@@ -92,6 +93,7 @@ export async function handleSlidesCliRequest({
     slidesMinDuration?: string
     render?: string
     timeout?: string
+    theme?: string
     cache?: boolean
     json?: boolean
     verbose?: boolean
@@ -122,6 +124,12 @@ export async function handleSlidesCliRequest({
   const timeoutRaw = typeof opts.timeout === 'string' && opts.timeout.trim() ? opts.timeout : '2m'
   const timeoutMs = parseDurationMs(timeoutRaw)
   const { config } = loadSummarizeConfig({ env: envForRun })
+  const themeName = resolveThemeNameFromSources({
+    cli: opts.theme,
+    env: envForRun.SUMMARIZE_THEME,
+    config: config?.ui?.theme,
+  })
+  ;(envForRun as Record<string, string | undefined>).SUMMARIZE_THEME = themeName
   const envState = resolveEnvState({ env: envForRun, envForRun, configForCli: config })
 
   const source = resolveSlideSourceFromUrl(url)
@@ -131,6 +139,11 @@ export async function handleSlidesCliRequest({
 
   const verboseEnabled = Boolean(opts.verbose || opts.debug)
   const progressEnabled = isRichTty(stderr) && !opts.json && !verboseEnabled
+  const theme = createThemeRenderer({
+    themeName,
+    enabled: progressEnabled,
+    trueColor: resolveTrueColor(envForRun),
+  })
   const oscProgress = progressEnabled
     ? createOscProgressController({
         label: 'Slides',
@@ -143,6 +156,7 @@ export async function handleSlidesCliRequest({
     text: 'Extracting slides…',
     enabled: progressEnabled,
     stream: stderr,
+    color: theme.palette.spinner,
   })
   const handleSignal = () => {
     try {
@@ -166,7 +180,7 @@ export async function handleSlidesCliRequest({
   }
   const verboseColor = supportsColor(stderr, envForRun)
   const logSlides = (message: string) => {
-    writeVerbose(stderr, verboseEnabled, `slides ${message}`, verboseColor)
+    writeVerbose(stderr, verboseEnabled, `slides ${message}`, verboseColor, envForRun)
   }
   const onSlidesProgress = (text: string) => {
     if (progressEnabled) {

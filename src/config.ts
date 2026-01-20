@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import JSON5 from 'json5'
+import { isCliThemeName, listCliThemes } from './tty/theme.js'
 
 export type AutoRuleKind = 'text' | 'website' | 'youtube' | 'image' | 'video' | 'file'
 export type VideoMode = 'auto' | 'transcript' | 'understand'
@@ -147,6 +148,12 @@ export type SummarizeConfig = {
      * - otherwise: translate the output into the requested language
      */
     language?: string
+  }
+  ui?: {
+    /**
+     * CLI theme name (e.g. "aurora", "ember", "moss", "mono").
+     */
+    theme?: string
   }
   cli?: CliConfig
   openai?: OpenAiConfig
@@ -745,6 +752,22 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
     return typeof language === 'string' ? { language } : undefined
   })()
 
+  const ui = (() => {
+    const value = (parsed as Record<string, unknown>).ui
+    if (typeof value === 'undefined') return undefined
+    if (!isRecord(value)) {
+      throw new Error(`Invalid config file ${path}: "ui" must be an object.`)
+    }
+    const themeRaw = typeof value.theme === 'string' ? value.theme.trim().toLowerCase() : ''
+    if (themeRaw && !isCliThemeName(themeRaw)) {
+      throw new Error(
+        `Invalid config file ${path}: "ui.theme" must be one of ${listCliThemes().join(', ')}.`
+      )
+    }
+    const theme = themeRaw.length > 0 ? themeRaw : undefined
+    return theme ? { theme } : undefined
+  })()
+
   const logging = (() => {
     const value = (parsed as Record<string, unknown>).logging
     if (typeof value === 'undefined') return undefined
@@ -840,6 +863,7 @@ export function loadSummarizeConfig({ env }: { env: Record<string, string | unde
       ...(models ? { models } : {}),
       ...(media ? { media } : {}),
       ...(output ? { output } : {}),
+      ...(ui ? { ui } : {}),
       ...(cli ? { cli } : {}),
       ...(openai ? { openai } : {}),
       ...(anthropic ? { anthropic } : {}),

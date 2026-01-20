@@ -17,6 +17,7 @@ import {
 import type { ExecFileFn } from '../markitdown.js'
 import type { FixedModelSpec } from '../model-spec.js'
 import { resolveSlideSettings } from '../slides/index.js'
+import { createThemeRenderer, resolveThemeNameFromSources, resolveTrueColor } from '../tty/theme.js'
 import { formatVersionLine } from '../version.js'
 import { createCacheStateFromConfig } from './cache-state.js'
 import {
@@ -42,7 +43,7 @@ import { resolveCliRunSettings } from './run-settings.js'
 import { resolveStreamSettings } from './run-stream.js'
 import { handleSlidesCliRequest } from './slides-cli.js'
 import { createSummaryEngine } from './summary-engine.js'
-import { ansi, isRichTty, supportsColor } from './terminal.js'
+import { isRichTty, supportsColor } from './terminal.js'
 import { handleTranscriberCliRequest } from './transcriber-cli.js'
 
 type RunEnv = {
@@ -427,6 +428,12 @@ export async function runCli(
     cliFlagPresent,
     cliProviderArg,
   })
+  const themeName = resolveThemeNameFromSources({
+    cli: (program.opts() as { theme?: unknown }).theme,
+    env: envForRun.SUMMARIZE_THEME,
+    config: config?.ui?.theme,
+  })
+  ;(envForRun as Record<string, string | undefined>).SUMMARIZE_THEME = themeName
   if (!promptOverride && typeof config?.prompt === 'string' && config.prompt.trim().length > 0) {
     promptOverride = config.prompt.trim()
   }
@@ -487,6 +494,11 @@ export async function runCli(
     })
 
     const verboseColor = supportsColor(stderr, envForRun)
+    const themeForStderr = createThemeRenderer({
+      themeName,
+      enabled: verboseColor,
+      trueColor: resolveTrueColor(envForRun),
+    })
     const { streamingEnabled } = resolveStreamSettings({
       streamMode,
       stdout,
@@ -559,7 +571,7 @@ export async function runCli(
       const filtered = parts.map((p) => p.trim()).filter(Boolean)
       if (filtered.length === 0) return
       clearProgressForStdout()
-      stderr.write(`${ansi('2', `via ${filtered.join(', ')}`, verboseColor)}\n`)
+      stderr.write(`${themeForStderr.dim(`via ${filtered.join(', ')}`)}\n`)
       restoreProgressAfterStdout?.()
     }
     const assetSummaryContext = {
@@ -632,6 +644,7 @@ export async function runCli(
 
     const assetInputContext = {
       env,
+      envForRun,
       stderr,
       progressEnabled,
       timeoutMs,
@@ -752,6 +765,7 @@ export async function runCli(
         verbose,
         verboseColor,
         progressEnabled,
+        streamMode,
         streamingEnabled,
         plain,
         configPath,

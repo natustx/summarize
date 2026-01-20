@@ -3,7 +3,10 @@ import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
+import { loadSummarizeConfig } from '../config.js'
+import { createThemeRenderer, resolveThemeNameFromSources, resolveTrueColor } from '../tty/theme.js'
 import { buildTranscriberHelp } from './help.js'
+import { supportsColor } from './terminal.js'
 
 type TranscriberCliContext = {
   normalizedArgv: string[]
@@ -106,6 +109,22 @@ export async function handleTranscriberCliRequest({
   }
 
   const model = parseModel(readArgValue(normalizedArgv, '--model'))
+  const { config } = loadSummarizeConfig({ env: envForRun })
+  const themeName = resolveThemeNameFromSources({
+    cli: readArgValue(normalizedArgv, '--theme'),
+    env: envForRun.SUMMARIZE_THEME,
+    config: config?.ui?.theme,
+  })
+  ;(envForRun as Record<string, string | undefined>).SUMMARIZE_THEME = themeName
+  const theme = createThemeRenderer({
+    themeName,
+    enabled: supportsColor(stdout, envForRun),
+    trueColor: resolveTrueColor(envForRun),
+  })
+  const heading = (text: string) => theme.heading(text)
+  const label = (text: string) => theme.label(text)
+  const value = (text: string) => theme.value(text)
+  const dim = (text: string) => theme.dim(text)
   const transcriberEnv = envForRun.SUMMARIZE_TRANSCRIBER?.trim() || 'auto'
 
   const onnxStatus = ONNX_MODELS.map((candidate) => {
@@ -125,40 +144,55 @@ export async function handleTranscriberCliRequest({
   const whisperModelPath = resolveWhisperCppModelPath(envForRun)
   const whisperModelReady = await fileExists(whisperModelPath)
 
-  stdout.write('Transcriber setup\n')
-  stdout.write(`Transcriber mode: ${transcriberEnv}\n`)
-  stdout.write('Auto order: ONNX (parakeet then canary) -> whisper.cpp -> OpenAI/FAL\n')
+  stdout.write(`${heading('Transcriber setup')}\n`)
+  stdout.write(`${label('Transcriber mode:')} ${value(transcriberEnv)}\n`)
+  stdout.write(
+    `${label('Auto order:')} ${value('ONNX (parakeet then canary) -> whisper.cpp -> OpenAI/FAL')}\n`
+  )
   stdout.write('\n')
   for (const entry of onnxStatus) {
     stdout.write(
-      `ONNX ${entry.model}: ${entry.configured ? 'configured' : 'not configured'} (${entry.envKey})\n`
+      `${label(`ONNX ${entry.model}:`)} ${value(
+        entry.configured ? 'configured' : 'not configured'
+      )} ${dim(`(${entry.envKey})`)}\n`
     )
   }
-  stdout.write(`ONNX cache: ${onnxCacheDir}\n`)
-  stdout.write(`ONNX ${model} artifacts: ${modelReady ? 'present' : 'missing'}\n`)
+  stdout.write(`${label('ONNX cache:')} ${value(onnxCacheDir)}\n`)
+  stdout.write(
+    `${label(`ONNX ${model} artifacts:`)} ${value(modelReady ? 'present' : 'missing')}\n`
+  )
   stdout.write('\n')
   stdout.write(
-    `whisper.cpp: ${whisperCliReady ? 'binary ok' : 'binary missing'} (${whisperBinary})\n`
+    `${label('whisper.cpp:')} ${value(whisperCliReady ? 'binary ok' : 'binary missing')} ${dim(
+      `(${whisperBinary})`
+    )}\n`
   )
   stdout.write(
-    `whisper.cpp model: ${whisperModelReady ? 'present' : 'missing'} (${whisperModelPath})\n`
+    `${label('whisper.cpp model:')} ${value(
+      whisperModelReady ? 'present' : 'missing'
+    )} ${dim(`(${whisperModelPath})`)}\n`
   )
   stdout.write('\n')
 
   if (!onnxStatus.some((entry) => entry.configured)) {
-    stdout.write('To enable ONNX locally:\n')
+    stdout.write(`${heading('To enable ONNX locally:')}\n`)
+    stdout.write(
+      `  ${dim('Install sherpa-onnx from upstream binaries or build; Homebrew may not have a formula.')}\n`
+    )
     for (const line of renderOnnxEnvExample(model)) {
       stdout.write(`  ${line}\n`)
     }
     stdout.write(
       '  # placeholders: {input}, {model}, {vocab}, {model_dir} (see docs/nvidia-onnx-transcription.md)\n'
     )
-    stdout.write('  # docs: docs/nvidia-onnx-transcription.md\n')
+    stdout.write(`  ${dim('# docs: docs/nvidia-onnx-transcription.md')}\n`)
     stdout.write('\n')
   }
 
-  stdout.write('Next:\n')
-  stdout.write('  summarize "https://..." --slides\n')
-  stdout.write('  SUMMARIZE_TRANSCRIBER=auto summarize "https://..." --extract --format md\n')
+  stdout.write(`${heading('Next:')}\n`)
+  stdout.write(`  ${value('summarize "https://..." --slides')}\n`)
+  stdout.write(
+    `  ${value('SUMMARIZE_TRANSCRIBER=auto summarize "https://..." --extract --format md')}\n`
+  )
   return true
 }

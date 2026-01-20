@@ -2,6 +2,7 @@ import type { CacheState } from '../../../cache.js'
 import type { SummarizeConfig } from '../../../config.js'
 import type { ExtractedLinkContent, LinkPreviewProgressEvent } from '../../../content/index.js'
 import type { LlmCall, RunMetricsReport } from '../../../costs.js'
+import type { StreamMode } from '../../../flags.js'
 import type { OutputLanguage } from '../../../language.js'
 import type { ExecFileFn } from '../../../markitdown.js'
 import type { FixedModelSpec, RequestedModel } from '../../../model-spec.js'
@@ -51,6 +52,7 @@ export type UrlFlowFlags = {
   verbose: boolean
   verboseColor: boolean
   progressEnabled: boolean
+  streamMode: StreamMode
   streamingEnabled: boolean
   plain: boolean
   configPath: string | null

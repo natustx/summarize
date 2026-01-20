@@ -4,11 +4,16 @@ import { createMarkdownStreamer, render as renderMarkdownAnsi } from 'markdansi'
 import type { ExtractedLinkContent } from '../../../content/index.js'
 import type { SummaryLength } from '../../../shared/contracts.js'
 import type { SlideExtractionResult, SlideImage, SlideSourceKind } from '../../../slides/index.js'
+import {
+  createThemeRenderer,
+  resolveThemeNameFromSources,
+  resolveTrueColor,
+} from '../../../tty/theme.js'
 import { prepareMarkdownForTerminalStreaming } from '../../markdown.js'
 import { createSlidesInlineRenderer } from '../../slides-render.js'
 import { createStreamOutputGate, type StreamOutputMode } from '../../stream-output.js'
 import type { SummaryStreamHandler } from '../../summary-engine.js'
-import { ansi, isRichTty, markdownRenderWidth, supportsColor } from '../../terminal.js'
+import { isRichTty, markdownRenderWidth, supportsColor } from '../../terminal.js'
 import {
   buildTimestampUrl,
   formatOsc8Link,
@@ -161,6 +166,11 @@ export function createSlidesTerminalOutput({
   const inlineEnabled = inlineProtocol !== 'none'
   const inlineNoticeEnabled = !flags.plain && !inlineEnabled
   let inlineNoticeShown = false
+  const labelTheme = createThemeRenderer({
+    themeName: resolveThemeNameFromSources({ env: io.envForRun.SUMMARIZE_THEME }),
+    enabled: supportsColor(io.stdout, io.envForRun) && !flags.plain,
+    trueColor: resolveTrueColor(io.envForRun),
+  })
 
   const state = createSlideOutputState(slides)
   state.setMeta({ sourceUrl: extracted.url })
@@ -222,7 +232,7 @@ export function createSlidesTerminalOutput({
       : null
     const slideLabelBase = total > 0 ? `Slide ${index}/${total}` : `Slide ${index}`
     const rawLabel = timeLink ? `${slideLabelBase} · ${timeLink}` : slideLabelBase
-    const label = ansi('2', rawLabel, supportsColor(io.stdout, io.envForRun) && !flags.plain)
+    const label = labelTheme.dim(rawLabel)
 
     clearProgressForStdout()
     io.stdout.write('\n')

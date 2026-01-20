@@ -51,11 +51,13 @@
 - CLI: show determinate transcription progress percent when duration is known.
 - Transcription: add auto transcriber selection (default) with ONNX-first when configured + `summarize transcriber setup`.
 - Slides: cap auto slide targets at 20 by default for long videos.
+- CLI: add themed output (24-bit ANSI), `--theme`, and config/env defaults for a consistent color scheme.
 
 ### Docs
 
 - README: 0.10.0 preview layout with clearer install flow, daemon rationale, and prominent Chrome Web Store link.
 - README: document ONNX transcriber setup + auto selection.
+- README/docs: add UI theme config + ONNX install hints.
 
 ## 0.9.0 - 2025-12-31
 

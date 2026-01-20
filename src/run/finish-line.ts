@@ -4,8 +4,8 @@ import {
   formatElapsedMs,
   formatMinutesSmart,
 } from '../tty/format.js'
+import { createThemeRenderer, resolveThemeNameFromSources, resolveTrueColor } from '../tty/theme.js'
 import { formatUSD, sumNumbersOrNull } from './format.js'
-import { ansi } from './terminal.js'
 
 export type FinishLineText = {
   line: string
@@ -190,6 +190,7 @@ export function writeFinishLine({
   detailed,
   extraParts,
   color,
+  env,
 }: {
   stderr: NodeJS.WritableStream
   elapsedMs: number
@@ -209,7 +210,16 @@ export function writeFinishLine({
   detailed: boolean
   extraParts?: string[] | null
   color: boolean
+  env?: Record<string, string | undefined>
 }): void {
+  const theme =
+    env && color
+      ? createThemeRenderer({
+          themeName: resolveThemeNameFromSources({ env: env.SUMMARIZE_THEME }),
+          enabled: color,
+          trueColor: resolveTrueColor(env),
+        })
+      : null
   const { compact, detailed: detailedText } = buildFinishLineVariants({
     elapsedMs,
     elapsedLabel,
@@ -223,9 +233,9 @@ export function writeFinishLine({
   const text = detailed ? detailedText : compact
 
   stderr.write('\n')
-  stderr.write(`${ansi('1;32', text.line, color)}\n`)
+  stderr.write(`${theme ? theme.success(text.line) : text.line}\n`)
   if (detailed && text.details) {
-    stderr.write(`${ansi('0;90', text.details, color)}\n`)
+    stderr.write(`${theme ? theme.dim(text.details) : text.details}\n`)
   }
 }
 

@@ -201,6 +201,7 @@ export function createMarkdownConverters(
             verbose: ctx.flags.verbose,
             color: ctx.flags.verboseColor,
             modelId: markdownModel.llmModelId,
+            env: ctx.io.envForRun,
           }),
           onUsage: ({ model: usedModel, provider, usage }) => {
             ctx.model.llmCalls.push({ provider, model: usedModel, usage, purpose: 'markdown' })
@@ -299,6 +300,7 @@ export function createMarkdownConverters(
             verbose: ctx.flags.verbose,
             color: ctx.flags.verboseColor,
             modelId: markdownModel.llmModelId,
+            env: ctx.io.envForRun,
           }),
           onUsage: ({ model: usedModel, provider, usage }) => {
             ctx.model.llmCalls.push({ provider, model: usedModel, usage, purpose: 'markdown' })

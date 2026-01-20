@@ -1,3 +1,4 @@
+import { isTwitterStatusUrl, isYouTubeUrl } from '@steipete/summarize-core/content/url'
 import { countTokens } from 'gpt-tokenizer'
 import { render as renderMarkdownAnsi } from 'markdansi'
 import {
@@ -217,16 +218,25 @@ function shouldBypassShortContentSummary({
   extracted,
   lengthArg,
   forceSummary,
+  maxOutputTokensArg,
+  json,
 }: {
   extracted: ExtractedLinkContent
   lengthArg: UrlFlowContext['flags']['lengthArg']
   forceSummary: boolean
+  maxOutputTokensArg: number | null
+  json: boolean
 }): boolean {
   if (forceSummary) return false
   if (!extracted.content || extracted.content.length === 0) return false
   const targetCharacters = resolveTargetCharacters(lengthArg, SUMMARY_LENGTH_TARGET_CHARACTERS)
   if (!Number.isFinite(targetCharacters) || targetCharacters <= 0) return false
-  return extracted.content.length <= targetCharacters
+  if (extracted.content.length > targetCharacters) return false
+  if (!json && typeof maxOutputTokensArg === 'number') {
+    const tokenCount = countTokens(extracted.content)
+    if (tokenCount > maxOutputTokensArg) return false
+  }
+  return true
 }
 
 async function outputSummaryFromExtractedContent({
@@ -300,6 +310,7 @@ async function outputSummaryFromExtractedContent({
       const costUsd = await hooks.estimateCostUsd()
       writeFinishLine({
         stderr: io.stderr,
+        env: io.envForRun,
         elapsedMs: Date.now() - flags.runStartedAtMs,
         label: extractionUi.finishSourceLabel,
         model: finishModel,
@@ -326,7 +337,7 @@ async function outputSummaryFromExtractedContent({
     hooks.writeViaFooter(footer)
   }
   if (verboseMessage && flags.verbose) {
-    writeVerbose(io.stderr, flags.verbose, verboseMessage, flags.verboseColor)
+    writeVerbose(io.stderr, flags.verbose, verboseMessage, flags.verboseColor, io.envForRun)
   }
 }
 
@@ -454,6 +465,7 @@ export async function outputExtractedUrl({
       const costUsd = await hooks.estimateCostUsd()
       writeFinishLine({
         stderr: io.stderr,
+        env: io.envForRun,
         elapsedMs: Date.now() - flags.runStartedAtMs,
         label: finishLabel,
         model: finishModel,
@@ -506,6 +518,7 @@ export async function outputExtractedUrl({
       const costUsd = await hooks.estimateCostUsd()
       writeFinishLine({
         stderr: io.stderr,
+        env: io.envForRun,
         elapsedMs: Date.now() - flags.runStartedAtMs,
         label: finishLabel,
         model: finishModel,
@@ -549,6 +562,7 @@ export async function outputExtractedUrl({
     const costUsd = await hooks.estimateCostUsd()
     writeFinishLine({
       stderr: io.stderr,
+      env: io.envForRun,
       elapsedMs: Date.now() - flags.runStartedAtMs,
       label: finishLabel,
       model: finishModel,
@@ -616,7 +630,8 @@ export async function summarizeExtractedUrl({
             io.stderr,
             flags.verbose,
             `auto candidate ${attempt.debug}`,
-            flags.verboseColor
+            flags.verboseColor,
+            io.envForRun
           )
         }
       }
@@ -677,13 +692,22 @@ export async function summarizeExtractedUrl({
   let summaryFromCache = false
   let cacheChecked = false
 
-  if (
+  const isTweet = extracted.siteName?.toLowerCase() === 'x' || isTwitterStatusUrl(extracted.url)
+  const isYouTube = extracted.siteName === 'YouTube' || isYouTubeUrl(url)
+  const autoBypass = ctx.model.isFallbackModel && !ctx.model.isNamedModelSelection
+  const canBypassShortContent =
+    (autoBypass || isTweet) &&
+    flags.streamMode !== 'on' &&
+    !isYouTube &&
     shouldBypassShortContentSummary({
       extracted,
       lengthArg: flags.lengthArg,
       forceSummary: flags.forceSummary,
+      maxOutputTokensArg: flags.maxOutputTokensArg,
+      json: flags.json,
     })
-  ) {
+
+  if (canBypassShortContent) {
     await outputSummaryFromExtractedContent({
       ctx,
       url,
@@ -712,7 +736,7 @@ export async function summarizeExtractedUrl({
       })
       const cached = cacheStore.getText('summary', key)
       if (!cached) continue
-      writeVerbose(io.stderr, flags.verbose, 'cache hit summary', flags.verboseColor)
+      writeVerbose(io.stderr, flags.verbose, 'cache hit summary', flags.verboseColor, io.envForRun)
       onModelChosen?.(attempt.userModelId)
       summaryResult = {
         summary: cached,
@@ -726,7 +750,7 @@ export async function summarizeExtractedUrl({
     }
   }
   if (cacheChecked && !summaryFromCache) {
-    writeVerbose(io.stderr, flags.verbose, 'cache miss summary', flags.verboseColor)
+    writeVerbose(io.stderr, flags.verbose, 'cache miss summary', flags.verboseColor, io.envForRun)
   }
   ctx.hooks.onSummaryCached?.(summaryFromCache)
 
@@ -746,7 +770,8 @@ export async function summarizeExtractedUrl({
           io.stderr,
           flags.verbose,
           `auto skip ${attempt.userModelId}: missing ${attempt.requiredEnv}`,
-          flags.verboseColor
+          flags.verboseColor,
+          io.envForRun
         )
       },
       onAutoFailure: (attempt, error) => {
@@ -756,7 +781,8 @@ export async function summarizeExtractedUrl({
           `auto failed ${attempt.userModelId}: ${
             error instanceof Error ? error.message : String(error)
           }`,
-          flags.verboseColor
+          flags.verboseColor,
+          io.envForRun
         )
       },
       onFixedModelError: (_attempt, error) => {
@@ -834,7 +860,7 @@ export async function summarizeExtractedUrl({
       languageKey,
     })
     cacheStore.setText('summary', key, summaryResult.summary, cacheState.ttlMs)
-    writeVerbose(io.stderr, flags.verbose, 'cache write summary', flags.verboseColor)
+    writeVerbose(io.stderr, flags.verbose, 'cache write summary', flags.verboseColor, io.envForRun)
   }
 
   const { summary, summaryAlreadyPrinted, modelMeta, maxOutputTokensForCall } = summaryResult
@@ -885,6 +911,7 @@ export async function summarizeExtractedUrl({
       const costUsd = await hooks.estimateCostUsd()
       writeFinishLine({
         stderr: io.stderr,
+        env: io.envForRun,
         elapsedMs: Date.now() - flags.runStartedAtMs,
         elapsedLabel: summaryFromCache ? 'Cached' : null,
         label: extractionUi.finishSourceLabel,
@@ -948,6 +975,7 @@ export async function summarizeExtractedUrl({
     const costUsd = await hooks.estimateCostUsd()
     writeFinishLine({
       stderr: io.stderr,
+      env: io.envForRun,
       elapsedMs: Date.now() - flags.runStartedAtMs,
       elapsedLabel: summaryFromCache ? 'Cached' : null,
       label: extractionUi.finishSourceLabel,

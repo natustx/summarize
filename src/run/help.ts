@@ -1,6 +1,12 @@
 import { Command, Option } from 'commander'
+import {
+  CLI_THEME_NAMES,
+  createThemeRenderer,
+  resolveThemeNameFromSources,
+  resolveTrueColor,
+} from '../tty/theme.js'
 import { SUPPORT_URL } from './constants.js'
-import { ansi, supportsColor } from './terminal.js'
+import { supportsColor } from './terminal.js'
 
 export function buildProgram() {
   return new Command()
@@ -133,6 +139,11 @@ export function buildProgram() {
     )
     .option('--plain', 'Keep raw text/markdown output (no ANSI/OSC rendering)', false)
     .option('--no-color', 'Disable ANSI colors in output', false)
+    .addOption(
+      new Option('--theme <name>', `CLI theme (${CLI_THEME_NAMES.join(', ')})`).choices(
+        CLI_THEME_NAMES
+      )
+    )
     .option('--verbose', 'Print detailed progress info to stderr', false)
     .option('--debug', 'Alias for --verbose (and defaults --metrics to detailed)', false)
     .addOption(
@@ -150,13 +161,18 @@ export function applyHelpStyle(
   stdout: NodeJS.WritableStream
 ) {
   const color = supportsColor(stdout, env)
+  const theme = createThemeRenderer({
+    themeName: resolveThemeNameFromSources({ env: env.SUMMARIZE_THEME }),
+    enabled: color,
+    trueColor: resolveTrueColor(env),
+  })
   program.configureHelp({
-    styleTitle: (text) => ansi('1;36', text, color),
-    styleCommandText: (text) => ansi('1', text, color),
-    styleSubcommandText: (text) => ansi('1', text, color),
-    styleOptionText: (text) => ansi('1', text, color),
-    styleArgumentText: (text) => ansi('33', text, color),
-    styleDescriptionText: (text) => ansi('2', text, color),
+    styleTitle: (text) => theme.heading(text),
+    styleCommandText: (text) => theme.accentStrong(text),
+    styleSubcommandText: (text) => theme.accent(text),
+    styleOptionText: (text) => theme.label(text),
+    styleArgumentText: (text) => theme.code(text),
+    styleDescriptionText: (text) => theme.dim(text),
   })
 }
 
@@ -180,6 +196,11 @@ export function buildSlidesProgram() {
         .choices(['auto', 'kitty', 'iterm', 'none'])
         .default('none')
     )
+    .addOption(
+      new Option('--theme <name>', `CLI theme (${CLI_THEME_NAMES.join(', ')})`).choices(
+        CLI_THEME_NAMES
+      )
+    )
     .option('--timeout <duration>', 'Timeout for video download/extraction (default: 2m).', '2m')
     .option('--no-cache', 'Bypass slide cache (force re-extract).')
     .option('--json', 'Output JSON payload (no inline rendering).', false)
@@ -196,9 +217,14 @@ export function attachRichHelp(
 ) {
   applyHelpStyle(program, env, stdout)
   const color = supportsColor(stdout, env)
-  const heading = (text: string) => ansi('1;36', text, color)
-  const cmd = (text: string) => ansi('1', text, color)
-  const dim = (text: string) => ansi('2', text, color)
+  const theme = createThemeRenderer({
+    themeName: resolveThemeNameFromSources({ env: env.SUMMARIZE_THEME }),
+    enabled: color,
+    trueColor: resolveTrueColor(env),
+  })
+  const heading = (text: string) => theme.heading(text)
+  const cmd = (text: string) => theme.accentStrong(text)
+  const dim = (text: string) => theme.dim(text)
 
   program.addHelpText(
     'after',
@@ -236,6 +262,9 @@ ${heading('Env Vars')}
   CODEX_PATH            optional (path to Codex CLI binary)
   GEMINI_PATH           optional (path to Gemini CLI binary)
   SUMMARIZE_MODEL       optional (overrides default model selection)
+  SUMMARIZE_THEME       optional (${CLI_THEME_NAMES.join(', ')})
+  SUMMARIZE_TRUECOLOR   optional (force 24-bit color)
+  SUMMARIZE_NO_TRUECOLOR optional (disable 24-bit color)
   FIRECRAWL_API_KEY     optional website extraction fallback (Markdown)
   APIFY_API_TOKEN       optional YouTube transcript fallback
   SUMMARIZE_TRANSCRIBER optional (auto, whisper, parakeet, canary)
@@ -302,13 +331,14 @@ export function buildDaemonHelp(): string {
 
 export function buildTranscriberHelp(): string {
   return [
-    'Usage: summarize transcriber setup [--model parakeet|canary]',
+    'Usage: summarize transcriber setup [--model parakeet|canary] [--theme <name>]',
     '',
     'Configures local ONNX transcription by printing the required env vars.',
     'Auto selection prefers ONNX when configured, then whisper.cpp, then OpenAI/FAL.',
     '',
     'Options:',
     '  --model <name>   parakeet (default) or canary',
+    `  --theme <name>   ${CLI_THEME_NAMES.join(', ')}`,
     '',
     'Examples:',
     '  summarize transcriber setup',
