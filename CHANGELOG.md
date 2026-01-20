@@ -48,6 +48,7 @@
 
 - Daemon: emit slides start/progress/done metadata in extended logging for easier debugging.
 - Media: refactor routing helpers and size policy (#48, thanks @steipete).
+- CLI: show determinate transcription progress percent when duration is known.
 
 ### Docs
 

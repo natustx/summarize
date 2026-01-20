@@ -120,6 +120,15 @@ export function createTranscriptProgressRenderer({
       state.service === 'podcast' ? 'podcast' : state.service === 'youtube' ? 'youtube' : 'media'
     const elapsedMs = typeof state.startedAtMs === 'number' ? Date.now() - state.startedAtMs : 0
     const elapsed = formatElapsedMs(elapsedMs)
+    const percent =
+      typeof state.whisperProcessedSeconds === 'number' &&
+      typeof state.whisperTotalSeconds === 'number' &&
+      state.whisperTotalSeconds > 0
+        ? Math.min(
+            100,
+            Math.max(0, Math.round((state.whisperProcessedSeconds / state.whisperTotalSeconds) * 100))
+          )
+        : null
 
     const duration =
       typeof state.whisperProcessedSeconds === 'number' &&
@@ -140,7 +149,9 @@ export function createTranscriptProgressRenderer({
         ? `, ${state.whisperPartIndex}/${state.whisperParts}`
         : ''
 
-    return `Transcribing (${svc}, ${providerLabel}${duration}${parts}, ${elapsed})…`
+    const percentLabel = typeof percent === 'number' ? ` ${percent}%` : ''
+
+    return `Transcribing${percentLabel} (${svc}, ${providerLabel}${duration}${parts}, ${elapsed})…`
   }
 
   return {
