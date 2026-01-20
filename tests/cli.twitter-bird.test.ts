@@ -19,6 +19,48 @@ function collectStream({ isTTY }: { isTTY: boolean }) {
   return { stream, getText: () => text }
 }
 
+function stripOsc(text: string): string {
+  let out = ''
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (ch !== '\u001b' || text[i + 1] !== ']') {
+      out += ch
+      continue
+    }
+
+    i += 2
+    while (i < text.length) {
+      const c = text[i]
+      if (c === '\u0007') break
+      if (c === '\u001b' && text[i + 1] === '\\') {
+        i += 1
+        break
+      }
+      i += 1
+    }
+  }
+  return out
+}
+
+function stripCsi(text: string): string {
+  let out = ''
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (ch !== '\u001b' || text[i + 1] !== '[') {
+      out += ch
+      continue
+    }
+
+    i += 2
+    while (i < text.length) {
+      const c = text[i]
+      if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) break
+      i += 1
+    }
+  }
+  return out
+}
+
 // Deterministic spinner: write the initial text once; stop/clear are no-ops.
 vi.mock('ora', () => {
   const ora = (opts: { text: string; stream: NodeJS.WritableStream }) => {
@@ -71,6 +113,7 @@ describe('cli bird status line', () => {
     })
 
     const rawErr = stderr.getText()
-    expect(rawErr).toContain('Bird:')
+    const plainErr = stripCsi(stripOsc(rawErr))
+    expect(plainErr).toContain('Bird:')
   })
 })

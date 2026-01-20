@@ -62,6 +62,19 @@ const createProgressTheme = (
   })
 }
 
+const renderStatus = (theme: ReturnType<typeof createProgressTheme>, label: string, detail = '…') =>
+  `${theme.label(label)}${theme.dim(detail)}`
+
+const renderStatusWithMeta = (
+  theme: ReturnType<typeof createProgressTheme>,
+  label: string,
+  meta: string,
+  suffix = '…'
+) => `${theme.label(label)} ${meta}${theme.dim(suffix)}`
+
+const renderModelSuffix = (theme: ReturnType<typeof createProgressTheme>, modelId: string) =>
+  `${theme.dim(' (model: ')}${theme.accent(modelId)}${theme.dim(')')}`
+
 function normalizePathForExtension(value: string): string {
   try {
     return new URL(value).pathname
@@ -96,19 +109,17 @@ function formatTranscriptionMeta({
 
 function setTranscribingSpinnerText({
   spinner,
+  theme,
   meta,
-  dim,
-  accent,
   modelId,
 }: {
   spinner: ReturnType<typeof startSpinner>
+  theme: ReturnType<typeof createProgressTheme>
   meta: string
-  dim: (value: string) => string
-  accent: (value: string) => string
   modelId?: string
 }) {
-  const modelLabel = modelId ? ` ${dim('(')}${dim('model: ')}${accent(modelId)}${dim(')')}` : ''
-  spinner.setText(`Transcribing ${meta}${modelLabel}…`)
+  const modelLabel = modelId ? renderModelSuffix(theme, modelId) : ''
+  spinner.setText(renderStatusWithMeta(theme, 'Transcribing', `${meta}${modelLabel}`))
 }
 
 async function runMediaTranscription({
@@ -128,11 +139,10 @@ async function runMediaTranscription({
 }): Promise<void> {
   const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
   const dim = (value: string) => theme.dim(value)
-  const accent = (value: string) => theme.accent(value)
   const meta = formatTranscriptionMeta({ filename, sizeLabel, dim })
 
   if (ctx.progressEnabled) {
-    setTranscribingSpinnerText({ spinner, meta, dim, accent })
+    setTranscribingSpinnerText({ spinner, theme, meta })
   }
 
   await ctx.summarizeMediaFile?.({
@@ -146,7 +156,7 @@ async function runMediaTranscription({
     },
     onModelChosen: (modelId) => {
       if (!ctx.progressEnabled) return
-      setTranscribingSpinnerText({ spinner, meta, dim, accent, modelId })
+      setTranscribingSpinnerText({ spinner, theme, meta, modelId })
     },
   })
 }
@@ -195,7 +205,7 @@ export async function handleFileInput(
     write: (data: string) => ctx.stderr.write(data),
   })
   const spinner = startSpinner({
-    text: sizeLabel ? `Loading file (${sizeLabel})…` : 'Loading file…',
+    text: renderStatus(theme, 'Loading file', sizeLabel ? ` (${sizeLabel})…` : '…'),
     enabled: ctx.progressEnabled,
     stream: ctx.stderr,
     color: theme.palette.spinner,
@@ -237,7 +247,6 @@ export async function handleFileInput(
       isTranscribable && ctx.summarizeMediaFile ? ctx.summarizeMediaFile : ctx.summarizeAsset
 
     const dim = (value: string) => theme.dim(value)
-    const accent = (value: string) => theme.accent(value)
 
     if (ctx.progressEnabled) {
       const mt = loaded.attachment.mediaType
@@ -245,7 +254,7 @@ export async function handleFileInput(
       const details = sizeLabel ? `${mt}, ${sizeLabel}` : mt
       const action = isTranscribable ? 'Transcribing' : 'Summarizing'
       const meta = name ? `${name} ${dim('(')}${details}${dim(')')}` : details
-      spinner.setText(`${action} ${meta}…`)
+      spinner.setText(renderStatusWithMeta(theme, action, meta))
     }
 
     await handler({
@@ -258,9 +267,8 @@ export async function handleFileInput(
         const name = loaded.attachment.filename
         const details = sizeLabel ? `${mt}, ${sizeLabel}` : mt
         const meta = name ? `${name} ${dim('(')}${details}${dim(')')}` : details
-        spinner.setText(
-          `Summarizing ${meta} ${dim('(')}${dim('model: ')}${accent(modelId)}${dim(')')}…`
-        )
+        const modelLabel = renderModelSuffix(theme, modelId)
+        spinner.setText(renderStatusWithMeta(theme, 'Summarizing', `${meta}${modelLabel}`))
       },
     })
     return true
@@ -297,7 +305,7 @@ export async function withUrlAsset(
       write: (data: string) => ctx.stderr.write(data),
     })
     const spinner = startSpinner({
-      text: `Transcribing ${filename}…`,
+      text: renderStatusWithMeta(theme, 'Transcribing', filename),
       enabled: ctx.progressEnabled,
       stream: ctx.stderr,
       color: theme.palette.spinner,
@@ -342,7 +350,7 @@ export async function withUrlAsset(
     write: (data: string) => ctx.stderr.write(data),
   })
   const spinner = startSpinner({
-    text: 'Downloading file…',
+    text: renderStatus(theme, 'Downloading file'),
     enabled: ctx.progressEnabled,
     stream: ctx.stderr,
     color: theme.palette.spinner,
@@ -390,17 +398,17 @@ export async function handleUrlAsset(
   return withUrlAsset(ctx, url, isYoutubeUrl, async ({ loaded, spinner }) => {
     const theme = createProgressTheme(ctx.envForRun, ctx.progressEnabled)
     const dim = (value: string) => theme.dim(value)
-    const accent = (value: string) => theme.accent(value)
-    if (ctx.progressEnabled) spinner.setText(`Summarizing ${dim('file')}…`)
+    if (ctx.progressEnabled) {
+      spinner.setText(renderStatusWithMeta(theme, 'Summarizing', dim('file')))
+    }
     await ctx.summarizeAsset({
       sourceKind: 'asset-url',
       sourceLabel: loaded.sourceLabel,
       attachment: loaded.attachment,
       onModelChosen: (modelId) => {
         if (!ctx.progressEnabled) return
-        spinner.setText(
-          `Summarizing ${dim('file')} ${dim('(')}${dim('model: ')}${accent(modelId)}${dim(')')}…`
-        )
+        const modelLabel = renderModelSuffix(theme, modelId)
+        spinner.setText(renderStatusWithMeta(theme, 'Summarizing', `${dim('file')}${modelLabel}`))
       },
     })
   })

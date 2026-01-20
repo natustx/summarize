@@ -161,10 +161,11 @@ describe('cli spinner output', () => {
     ).rejects.toThrow(/uvx\/markitdown/i)
 
     const rawErr = stderr.getText()
-    expect(rawErr).toContain('Loading file (1.5 KB)')
+    const plainErr = stripCsi(stripOsc(rawErr))
+    expect(plainErr).toContain('Loading file (1.5 KB)')
     expect(rawErr).toContain('\r\u001b[2K')
 
-    const visibleErr = applyCarriageReturnAndClearLine(stripCsi(stripOsc(rawErr)))
+    const visibleErr = applyCarriageReturnAndClearLine(plainErr)
     expect(visibleErr).not.toMatch(/Loading file/i)
     // When calling `runCli` directly, errors are thrown (not printed). We only assert
     // that the spinner line is cleared and does not pollute scrollback.

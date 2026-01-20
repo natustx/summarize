@@ -144,6 +144,13 @@ export async function handleSlidesCliRequest({
     enabled: progressEnabled,
     trueColor: resolveTrueColor(envForRun),
   })
+  const renderStatus = (label: string, detail = '…') => `${theme.label(label)}${theme.dim(detail)}`
+  const renderStatusFromText = (text: string) => {
+    const match = text.match(/^([^:]+):(.*)$/)
+    if (!match) return renderStatus(text)
+    const [, prefix, rest] = match
+    return `${theme.label(prefix.trim())}${theme.dim(`:${rest}`)}`
+  }
   const oscProgress = progressEnabled
     ? createOscProgressController({
         label: 'Slides',
@@ -153,7 +160,7 @@ export async function handleSlidesCliRequest({
       })
     : null
   const spinner = startSpinner({
-    text: 'Extracting slides…',
+    text: renderStatus('Extracting slides'),
     enabled: progressEnabled,
     stream: stderr,
     color: theme.palette.spinner,
@@ -184,7 +191,7 @@ export async function handleSlidesCliRequest({
   }
   const onSlidesProgress = (text: string) => {
     if (progressEnabled) {
-      spinner.setText(text)
+      spinner.setText(renderStatusFromText(text))
       const match = text.match(/(\d{1,3})%/)
       const percent = match ? Number(match[1]) : null
       if (Number.isFinite(percent) && percent !== null) {

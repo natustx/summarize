@@ -51,6 +51,7 @@
 - CLI: show determinate transcription progress percent when duration is known.
 - CLI: theme transcription progress lines and mirror part-based progress to OSC when duration is unknown.
 - CLI: theme tweet/extraction progress lines for consistent loading indicators.
+- CLI: theme file/slide spinner labels so all progress lines share the same styling.
 - CLI: simplify media download labels (avoid “media, video” duplication).
 - Transcription: add auto transcriber selection (default) with ONNX-first when configured + `summarize transcriber setup`.
 - Slides: cap auto slide targets at 20 by default for long videos.

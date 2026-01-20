@@ -111,18 +111,17 @@ export function createTranscriptProgressRenderer({
       elapsedMs > 0 && state.downloadedBytes > 0
         ? `, ${formatBytesPerSecond(state.downloadedBytes / (elapsedMs / 1000))}`
         : ''
-    const svc =
-      state.service === 'podcast' ? 'podcast' : state.service === 'youtube' ? 'youtube' : 'media'
     const kindLabel = state.mediaKind === 'video' ? 'video' : 'audio'
-    const svcLabel = svc
+    const svcLabel =
+      state.service === 'podcast' ? 'podcast' : state.service === 'youtube' ? 'youtube' : ''
     return renderLine(
       `Downloading ${kindLabel}`,
-      ` (${svcLabel}, ${downloaded}${total}, ${elapsed}${rate})…`
+      ` (${svcLabel ? `${svcLabel}, ` : ''}${downloaded}${total}, ${elapsed}${rate})…`
     )
   }
 
   const downloadTitle = () =>
-    state.mediaKind === 'video' ? 'Downloading media' : 'Downloading audio'
+    state.mediaKind === 'video' ? 'Downloading video' : 'Downloading audio'
 
   const formatProvider = (hint: typeof state.whisperProviderHint) => {
     if (hint === 'cpp') return 'Whisper.cpp'
@@ -285,7 +284,11 @@ export function createTranscriptProgressRenderer({
       if (event.kind === 'transcript-done') {
         stopTicker()
         oscProgress?.clear()
-        updateSpinner(event.ok ? 'Transcribed…' : 'Transcript failed; fallback…', { force: true })
+        if (event.ok) {
+          updateSpinner(renderSimple('Transcribed'), { force: true })
+        } else {
+          updateSpinner(renderLine('Transcript failed', '; fallback…'), { force: true })
+        }
       }
     },
   }

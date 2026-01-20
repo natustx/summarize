@@ -1,13 +1,16 @@
 import type { LinkPreviewProgressEvent } from '@steipete/summarize-core/content'
 import { formatBytes, formatBytesPerSecond, formatElapsedMs } from '../format.js'
 import type { OscProgressController } from '../osc-progress.js'
+import type { ThemeRenderer } from '../theme.js'
 
 export function createFetchHtmlProgressRenderer({
   spinner,
   oscProgress,
+  theme,
 }: {
   spinner: { setText: (text: string) => void }
   oscProgress?: OscProgressController | null
+  theme?: ThemeRenderer | null
 }): {
   stop: () => void
   onProgress: (event: LinkPreviewProgressEvent) => void
@@ -25,6 +28,10 @@ export function createFetchHtmlProgressRenderer({
   }
 
   let ticker: ReturnType<typeof setInterval> | null = null
+  const styleLabel = (text: string) => (theme ? theme.label(text) : text)
+  const styleDim = (text: string) => (theme ? theme.dim(text) : text)
+  const renderLine = (label: string, detail: string) =>
+    theme ? `${styleLabel(label)}${styleDim(detail)}` : `${label}${detail}`
 
   const updateSpinner = (text: string, options?: { force?: boolean }) => {
     const now = Date.now()
@@ -34,6 +41,7 @@ export function createFetchHtmlProgressRenderer({
   }
 
   const render = () => {
+    const label = 'Fetching website'
     const downloaded = formatBytes(state.downloadedBytes)
     const total =
       typeof state.totalBytes === 'number' &&
@@ -44,13 +52,13 @@ export function createFetchHtmlProgressRenderer({
     const elapsedMs = typeof state.startedAtMs === 'number' ? Date.now() - state.startedAtMs : 0
     const elapsed = formatElapsedMs(elapsedMs)
     if (state.downloadedBytes === 0 && !state.totalBytes) {
-      return `Fetching website (connecting, ${elapsed})…`
+      return renderLine(label, ` (connecting, ${elapsed})…`)
     }
     const rate =
       elapsedMs > 0 && state.downloadedBytes > 0
         ? `, ${formatBytesPerSecond(state.downloadedBytes / (elapsedMs / 1000))}`
         : ''
-    return `Fetching website (${downloaded}${total}, ${elapsed}${rate})…`
+    return renderLine(label, ` (${downloaded}${total}, ${elapsed}${rate})…`)
   }
 
   const startTicker = () => {
@@ -78,7 +86,7 @@ export function createFetchHtmlProgressRenderer({
         state.totalBytes = null
         state.startedAtMs = Date.now()
         startTicker()
-        updateSpinner('Fetching website (connecting)…')
+        updateSpinner(renderLine('Fetching website', ' (connecting)…'))
         oscProgress?.setIndeterminate('Fetching website')
         return
       }

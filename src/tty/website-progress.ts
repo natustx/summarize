@@ -22,7 +22,7 @@ export function createWebsiteProgress({
 } | null {
   if (!enabled) return null
 
-  const fetchRenderer = createFetchHtmlProgressRenderer({ spinner, oscProgress })
+  const fetchRenderer = createFetchHtmlProgressRenderer({ spinner, oscProgress, theme })
   const transcriptRenderer = createTranscriptProgressRenderer({ spinner, oscProgress, theme })
 
   const styleLabel = (text: string) => (theme ? theme.label(text) : text)

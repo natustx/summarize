@@ -127,11 +127,21 @@ export async function runUrlFlow({
   })
   oscProgress.setIndeterminate('Fetching website')
   const spinner = startSpinner({
-    text: 'Fetching website (connecting)…',
+    text: `${theme.label('Fetching website')}${theme.dim(' (connecting)…')}`,
     enabled: flags.progressEnabled,
     stream: io.stderr,
     color: theme.palette.spinner,
   })
+  const styleLabel = (text: string) => theme.label(text)
+  const styleDim = (text: string) => theme.dim(text)
+  const renderStatus = (label: string, detail = '…') => `${styleLabel(label)}${styleDim(detail)}`
+  const renderStatusWithMeta = (label: string, meta: string, suffix = '…') =>
+    `${styleLabel(label)} ${meta}${styleDim(suffix)}`
+  const renderStatusFromText = (text: string) => {
+    const match = text.match(/^([^:]+):(.*)$/)
+    if (!match) return styleLabel(text)
+    return `${styleLabel(match[1])}${styleDim(`:${match[2]}`)}`
+  }
   const handleSignal = () => {
     try {
       spinner.stopAndClear()
@@ -154,9 +164,9 @@ export async function runUrlFlow({
   }
   if (!hooks.onSlidesProgress && flags.progressEnabled) {
     hooks.onSlidesProgress = (text: string) => {
-      spinner.setText(text)
       const match = text.match(/(\d{1,3})%/)
       const percent = match ? Number(match[1]) : null
+      spinner.setText(renderStatusFromText(text))
       if (Number.isFinite(percent) && percent !== null) {
         oscProgress.setPercent('Slides', Math.max(0, Math.min(100, percent)))
       } else {
@@ -378,7 +388,9 @@ export async function runUrlFlow({
       outputMode: 'delta',
       clearProgressForStdout: hooks.clearProgressForStdout,
       restoreProgressAfterStdout: hooks.restoreProgressAfterStdout ?? null,
-      onProgressText: flags.progressEnabled ? (text) => spinner.setText(text) : null,
+      onProgressText: flags.progressEnabled
+        ? (text) => spinner.setText(renderStatusFromText(text))
+        : null,
     })
 
     if (slidesOutput) {
@@ -449,7 +461,7 @@ export async function runUrlFlow({
           )
         }
         if (flags.progressEnabled) {
-          spinner.setText('Extracting slides…')
+          spinner.setText(renderStatus('Extracting slides'))
           oscProgress.setIndeterminate('Extracting slides')
         }
         // Prefer indeterminate progress until we get real percentage updates from the slide pipeline.
@@ -521,7 +533,7 @@ export async function runUrlFlow({
       const sentLabel = `${dim('sent ')}${extractionUi.contentSizeLabel}${extractionUi.viaSourceLabel}`
       const modelLabel = modelId ? `${dim('model: ')}${accent(modelId)}` : ''
       const meta = modelLabel ? `${sentLabel}${dim(', ')}${modelLabel}` : sentLabel
-      return `Summarizing ${dim('(')}${meta}${dim(')')}…`
+      return `${styleLabel('Summarizing')} ${dim('(')}${meta}${dim(')')}${dim('…')}`
     }
 
     const updateSummaryProgress = () => {
@@ -532,7 +544,9 @@ export async function runUrlFlow({
       }
       spinner.setText(
         flags.extractMode
-          ? `Extracted (${extractionUi.contentSizeLabel}${extractionUi.viaSourceLabel})`
+          ? `${styleLabel('Extracted')}${styleDim(
+              ` (${extractionUi.contentSizeLabel}${extractionUi.viaSourceLabel})`
+            )}`
           : formatSummaryProgress()
       )
     }
@@ -577,7 +591,7 @@ export async function runUrlFlow({
           io.envForRun
         )
         if (flags.progressEnabled) {
-          spinner.setText('Video-only page: fetching YouTube transcript…')
+          spinner.setText(renderStatus('Video-only page', ': fetching YouTube transcript…'))
         }
         extracted = await fetchWithCache(extracted.video.url)
         extractionUi = deriveExtractionUi(extracted)
@@ -596,7 +610,7 @@ export async function runUrlFlow({
 
         if (canVideoUnderstand) {
           hooks.onExtracted?.(extracted)
-          if (flags.progressEnabled) spinner.setText('Downloading video…')
+          if (flags.progressEnabled) spinner.setText(renderStatus('Downloading video'))
           const loadedVideo = await loadRemoteAsset({
             url: extracted.video.url,
             fetchImpl: io.fetch,
@@ -605,7 +619,7 @@ export async function runUrlFlow({
           assertAssetMediaTypeSupported({ attachment: loadedVideo.attachment, sizeLabel: null })
 
           let chosenModel: string | null = null
-          if (flags.progressEnabled) spinner.setText('Summarizing video…')
+          if (flags.progressEnabled) spinner.setText(renderStatus('Summarizing video'))
           await hooks.summarizeAsset({
             sourceKind: 'asset-url',
             sourceLabel: loadedVideo.sourceLabel,
@@ -613,7 +627,12 @@ export async function runUrlFlow({
             onModelChosen: (modelId) => {
               chosenModel = modelId
               hooks.onModelChosen?.(modelId)
-              if (flags.progressEnabled) spinner.setText(`Summarizing video (model: ${modelId})…`)
+              if (flags.progressEnabled) {
+                const meta = `${styleDim('(')}${styleDim('model: ')}${theme.accent(
+                  modelId
+                )}${styleDim(')')}`
+                spinner.setText(renderStatusWithMeta('Summarizing video', meta))
+              }
             },
           })
           const slideCount = directVideoSlides ? directVideoSlides.slides.length : null
@@ -675,7 +694,7 @@ export async function runUrlFlow({
       let extractedForOutput = extracted
       if (markdown.transcriptMarkdownRequested && markdown.convertTranscriptToMarkdown) {
         if (flags.progressEnabled) {
-          spinner.setText('Converting transcript to markdown…')
+          spinner.setText(renderStatus('Converting transcript to markdown'))
         }
         const markdownContent = await markdown.convertTranscriptToMarkdown({
           title: extracted.title,

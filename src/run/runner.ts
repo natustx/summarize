@@ -536,6 +536,12 @@ export async function runCli(
       enabled: verboseColor,
       trueColor: resolveTrueColor(envForRun),
     })
+    const renderSpinnerStatus = (label: string, detail = '…') =>
+      `${themeForStderr.label(label)}${themeForStderr.dim(detail)}`
+    const renderSpinnerStatusWithModel = (label: string, modelId: string) =>
+      `${themeForStderr.label(label)}${themeForStderr.dim(' (model: ')}${themeForStderr.accent(
+        modelId
+      )}${themeForStderr.dim(')…')}`
     const { streamingEnabled } = resolveStreamSettings({
       streamMode,
       stdout,
@@ -700,7 +706,7 @@ export async function runCli(
       url &&
       (await withUrlAsset(assetInputContext, url, isYoutubeUrl, async ({ loaded, spinner }) => {
         if (extractMode) {
-          if (progressEnabled) spinner.setText('Extracting text…')
+          if (progressEnabled) spinner.setText(renderSpinnerStatus('Extracting text'))
           const extracted = await extractAssetContent({
             ctx: {
               env,
@@ -748,14 +754,14 @@ export async function runCli(
           return
         }
 
-        if (progressEnabled) spinner.setText('Summarizing…')
+        if (progressEnabled) spinner.setText(renderSpinnerStatus('Summarizing'))
         await summarizeAsset({
           sourceKind: 'asset-url',
           sourceLabel: loaded.sourceLabel,
           attachment: loaded.attachment,
           onModelChosen: (modelId) => {
             if (!progressEnabled) return
-            spinner.setText(`Summarizing (model: ${modelId})…`)
+            spinner.setText(renderSpinnerStatusWithModel('Summarizing', modelId))
           },
         })
       }))
