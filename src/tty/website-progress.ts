@@ -25,6 +25,11 @@ export function createWebsiteProgress({
   const fetchRenderer = createFetchHtmlProgressRenderer({ spinner, oscProgress })
   const transcriptRenderer = createTranscriptProgressRenderer({ spinner, oscProgress, theme })
 
+  const styleLabel = (text: string) => (theme ? theme.label(text) : text)
+  const styleDim = (text: string) => (theme ? theme.dim(text) : text)
+  const renderStatus = (label: string, detail: string) =>
+    theme ? `${styleLabel(label)}${styleDim(detail)}` : `${label}${detail}`
+
   const stopAll = () => {
     fetchRenderer.stop()
     transcriptRenderer.stop()
@@ -46,33 +51,33 @@ export function createWebsiteProgress({
 
       if (event.kind === 'bird-start') {
         stopAll()
-        spinner.setText('Bird: reading tweet…')
+        spinner.setText(renderStatus('Bird', ': reading tweet…'))
         return
       }
 
       if (event.kind === 'bird-done') {
         stopAll()
         if (event.ok && typeof event.textBytes === 'number') {
-          spinner.setText(`Bird: got ${formatBytes(event.textBytes)}…`)
+          spinner.setText(renderStatus('Bird', `: got ${formatBytes(event.textBytes)}…`))
           return
         }
-        spinner.setText('Bird: failed; fallback…')
+        spinner.setText(renderStatus('Bird', ': failed; fallback…'))
         return
       }
 
       if (event.kind === 'nitter-start') {
         stopAll()
-        spinner.setText('Nitter: fetching…')
+        spinner.setText(renderStatus('Nitter', ': fetching…'))
         return
       }
 
       if (event.kind === 'nitter-done') {
         stopAll()
         if (event.ok && typeof event.textBytes === 'number') {
-          spinner.setText(`Nitter: got ${formatBytes(event.textBytes)}…`)
+          spinner.setText(renderStatus('Nitter', `: got ${formatBytes(event.textBytes)}…`))
           return
         }
-        spinner.setText('Nitter: failed; fallback…')
+        spinner.setText(renderStatus('Nitter', ': failed; fallback…'))
         return
       }
 
@@ -80,24 +85,25 @@ export function createWebsiteProgress({
         stopAll()
         const reason = event.reason ? formatFirecrawlReason(event.reason) : ''
         const suffix = reason ? ` (${reason})` : ''
-        spinner.setText(`Firecrawl: scraping${suffix}…`)
+        spinner.setText(renderStatus('Firecrawl', `: scraping${suffix}…`))
         return
       }
 
       if (event.kind === 'firecrawl-done') {
         stopAll()
         if (event.ok && typeof event.markdownBytes === 'number') {
-          spinner.setText(`Firecrawl: got ${formatBytes(event.markdownBytes)}…`)
+          spinner.setText(renderStatus('Firecrawl', `: got ${formatBytes(event.markdownBytes)}…`))
           return
         }
-        spinner.setText('Firecrawl: no content; fallback…')
+        spinner.setText(renderStatus('Firecrawl', ': no content; fallback…'))
         return
       }
 
       if (event.kind === 'transcript-start') {
         stopAll()
         const label = event.hint?.trim()
-        spinner.setText(`${label && label.length > 0 ? label : 'Transcribing'}…`)
+        const text = label && label.length > 0 ? label : 'Transcribing'
+        spinner.setText(theme ? `${styleLabel(text)}${styleDim('…')}` : `${text}…`)
       }
     },
   }
