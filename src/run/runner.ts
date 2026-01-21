@@ -423,10 +423,11 @@ export async function runCli(
   }
 
   const slidesExplicitlySet = normalizedArgv.some(
-    (arg) => arg === '--slides' || arg.startsWith('--slides=')
+    (arg) => arg === '--slides' || arg === '--no-slides' || arg.startsWith('--slides=')
   )
   const slidesOcrExplicitlySet = normalizedArgv.some(
-    (arg) => arg === '--slides-ocr' || arg.startsWith('--slides-ocr=')
+    (arg) =>
+      arg === '--slides-ocr' || arg === '--no-slides-ocr' || arg.startsWith('--slides-ocr=')
   )
   const slidesDirExplicitlySet = normalizedArgv.some(
     (arg) => arg === '--slides-dir' || arg.startsWith('--slides-dir=')
@@ -818,6 +819,7 @@ export async function runCli(
         configModelLabel,
         slides: slidesSettings,
         slidesDebug,
+        slidesOutput: true,
       },
       model: {
         requestedModel,

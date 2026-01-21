@@ -2,7 +2,17 @@ import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from '@ma
 import { extractYouTubeVideoId, shouldPreferUrlMode } from '@steipete/summarize-core/content/url'
 import { SUMMARY_LENGTH_SPECS } from '@steipete/summarize-core/prompts'
 import MarkdownIt from 'markdown-it'
-
+import {
+  buildSlideTextFallback,
+  coerceSummaryWithSlides,
+  parseSlideSummariesFromMarkdown,
+  parseTranscriptTimedText,
+  resolveSlideTextBudget,
+  type SlideTimelineEntry,
+  splitSlideTitleFromText,
+  splitSummaryFromSlides,
+} from '../../../../../src/run/flows/url/slides-text.js'
+import type { SummaryLength } from '../../../../../src/shared/contracts.js'
 import { parseSseEvent, type SseSlidesData } from '../../../../../src/shared/sse-events.js'
 import { listSkills } from '../../automation/skills-store'
 import { executeToolCall, getAutomationToolNames } from '../../automation/tools'
@@ -250,6 +260,7 @@ const chatHistoryCache = new Map<number, ChatMessage[]>()
 let chatHistoryLoadId = 0
 let activeTabId: number | null = null
 let activeTabUrl: string | null = null
+let lastPanelOpen = false
 let lastStreamError: string | null = null
 let lastAction: 'summarize' | 'chat' | null = null
 let abortAgentRequested = false
@@ -263,12 +274,10 @@ let summarizePageWords: number | null = null
 let summarizeVideoDurationSeconds: number | null = null
 
 type SlideTextMode = 'transcript' | 'ocr'
-type TranscriptSegment = { startSeconds: number; text: string }
 let slidesBusy = false
 let slidesExpanded = true
 let slidesTextMode: SlideTextMode = 'transcript'
 let slidesTextToggleVisible = false
-let slidesTranscriptSegments: TranscriptSegment[] = []
 let slidesTranscriptTimedText: string | null = null
 let slidesTranscriptAvailable = false
 let slidesOcrAvailable = false
@@ -276,9 +285,18 @@ let slidesLayoutValue: SlidesLayout = defaultSettings.slidesLayout
 let slideDescriptions = new Map<number, string>()
 let slideSummaryByIndex = new Map<number, string>()
 let slideTitleByIndex = new Map<number, string>()
+let slideSummarySource: 'summary' | 'slides' | null = null
 let slidesContextRequestId = 0
 let slidesContextPending = false
 let slidesContextUrl: string | null = null
+let slidesSeededSourceId: string | null = null
+let slidesSummaryRunId: string | null = null
+let slidesSummaryUrl: string | null = null
+let slidesSummaryMarkdown = ''
+let slidesSummaryPending: string | null = null
+let slidesSummaryHadError = false
+let slidesSummaryComplete = false
+let slidesSummaryModel: string | null = null
 let pendingRunForPlannedSlides: RunStart | null = null
 
 const AGENT_NAV_TTL_MS = 20_000
@@ -321,12 +339,25 @@ function stopSlidesStream() {
   slidesHydrator.stop()
   setSlidesBusy(false)
   panelState.slidesRunId = null
+  stopSlidesSummaryStream()
 }
 
 function setSlidesTranscriptTimedText(value: string | null) {
   slidesTranscriptTimedText = value ?? null
-  slidesTranscriptSegments = parseTranscriptTimedText(slidesTranscriptTimedText)
-  slidesTranscriptAvailable = slidesTranscriptSegments.length > 0
+  const segments = parseTranscriptTimedText(slidesTranscriptTimedText)
+  slidesTranscriptAvailable = segments.length > 0
+}
+
+function stopSlidesSummaryStream() {
+  slidesSummaryController.abort()
+  slidesSummaryRunId = null
+  slidesSummaryUrl = null
+  slidesSummaryMarkdown = ''
+  slidesSummaryPending = null
+  slidesSummaryHadError = false
+  slidesSummaryComplete = false
+  slidesSummaryModel = null
+  slideSummarySource = null
 }
 
 async function fetchSlideTools(): Promise<{
@@ -999,6 +1030,8 @@ function resetSummaryView({
   slideDescriptions = new Map()
   slideSummaryByIndex = new Map()
   slideTitleByIndex = new Map()
+  slideSummarySource = null
+  slidesSeededSourceId = null
   stopSlidesStream()
   refreshSummarizeControl()
   if (!preserveChat) {
@@ -1117,38 +1150,9 @@ window.addEventListener('unhandledrejection', (event) => {
   setPhase('error', { error: message })
 })
 
-const SLIDE_LABEL_PATTERN =
-  /^(?:\[)?slide\s+(\d+)(?:\s*(?:\/|of)\s*\d+)?(?:\])?(?:\s*[\u00b7:-]\s*.*)?$/i
-const SLIDE_TAG_PATTERN = /^\[slide:(\d+)\]\s*(.*)$/i
-
-function findSlidesSectionStart(markdown: string): number | null {
-  if (!markdown) return null
-  const heading = markdown.match(/^#{1,3}\s+Slides\b.*$/im)
-  const tag = markdown.match(/^\[slide:\d+\]/im)
-  const label = markdown.match(/^\s*slide\s+\d+(?:\s*(?:\/|of)\s*\d+)?(?:\s*[\u00b7:-].*)?$/im)
-  const indexes = [heading?.index, tag?.index, label?.index].filter(
-    (idx): idx is number => idx != null
-  )
-  if (indexes.length === 0) return null
-  return Math.min(...indexes)
-}
-
-function deriveHeadlineFromBody(body: string): string | null {
-  const cleaned = body.trim().replace(/\s+/g, ' ')
-  if (!cleaned) return null
-  const firstSentence = cleaned.split(/[.!?]/)[0] ?? ''
-  const clause = firstSentence.split(/[,;:\u2013\u2014-]/)[0] ?? firstSentence
-  const words = clause.trim().split(/\s+/).filter(Boolean)
-  if (words.length < 2) return null
-  const title = words.slice(0, Math.min(6, words.length)).join(' ')
-  return title.replace(/[,:;-]+$/g, '').trim() || null
-}
-
 function splitSlidesMarkdown(markdown: string): { summary: string; slides: string | null } {
-  const startAt = findSlidesSectionStart(markdown)
-  if (startAt == null) return { summary: markdown.trim(), slides: null }
-  const summary = markdown.slice(0, startAt).trim()
-  const slides = markdown.slice(startAt).trim()
+  const { summary, slidesSection } = splitSummaryFromSlides(markdown)
+  const slides = slidesSection?.trim() ?? ''
   return { summary, slides: slides.length > 0 ? slides : null }
 }
 
@@ -1187,162 +1191,73 @@ function renderMarkdownDisplay() {
 
 function renderMarkdown(markdown: string) {
   panelState.summaryMarkdown = markdown
-  updateSlideSummaryFromMarkdown(markdown)
+  updateSlideSummaryFromMarkdown(markdown, {
+    preserveIfEmpty: slideSummaryByIndex.size > 0,
+    source: 'summary',
+  })
   renderMarkdownDisplay()
   panelCacheController.scheduleSync()
 }
 
-function updateSlideSummaryFromMarkdown(markdown: string) {
-  const parsed = parseSlideSummariesFromMarkdown(markdown)
-  slideSummaryByIndex = parsed.summaries
-  slideTitleByIndex = parsed.titles
-  rebuildSlideDescriptions()
-  queueSlidesRender()
-}
-
-function parseSlideSummariesFromMarkdown(markdown: string): {
+function deriveSlideSummaries(markdown: string): {
   summaries: Map<number, string>
   titles: Map<number, string>
-} {
+} | null {
+  let parsed = parseSlideSummariesFromMarkdown(markdown)
+  const hasMeaningfulSlides = Array.from(parsed.values()).some((text) => text.trim().length > 0)
+  if ((!hasMeaningfulSlides || parsed.size === 0) && panelState.slides?.slides.length) {
+    const lengthArg = resolveSlidesLengthArg(pickerSettings.length)
+    const timeline: SlideTimelineEntry[] = panelState.slides.slides.map((slide) => ({
+      index: slide.index,
+      timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : Number.NaN,
+    }))
+    const coerced = coerceSummaryWithSlides({
+      markdown,
+      slides: timeline,
+      transcriptTimedText: slidesTranscriptTimedText,
+      lengthArg,
+    })
+    parsed = parseSlideSummariesFromMarkdown(coerced)
+  }
+  if (parsed.size === 0) return null
+  const total = panelState.slides?.slides.length ?? parsed.size
   const summaries = new Map<number, string>()
   const titles = new Map<number, string>()
-  if (!markdown.trim()) return { summaries, titles }
-  const startAt = findSlidesSectionStart(markdown)
-  if (startAt == null) return { summaries, titles }
-  const slice = markdown.slice(startAt)
-  const isTitleCandidate = (line: string) => line.length <= 80 && !/[.!?]/.test(line)
-
-  const lines = slice.split('\n')
-  let currentIndex: number | null = null
-  let buffer: string[] = []
-  let sawBlankAfterTitle = false
-  const hasFutureMarker = (start: number) =>
-    lines.slice(start).some((line) => {
-      const trimmed = line.trim()
-      return SLIDE_TAG_PATTERN.test(trimmed) || SLIDE_LABEL_PATTERN.test(trimmed)
-    })
-  const flush = () => {
-    if (currentIndex == null) return
-    const raw = buffer.join('\n').trim()
-    if (raw) {
-      const lines = raw
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .filter((line) => !SLIDE_LABEL_PATTERN.test(line) && !/^\[slide:\d+\]/i.test(line))
-      if (lines.length === 0) {
-        currentIndex = null
-        buffer = []
-        return
-      }
-      let title: string | null = null
-      let titleIndex: number | null = null
-      const titleLineIndex = lines.findIndex((line) => /^(?:title|headline)\s*:\s*/i.test(line))
-      if (titleLineIndex >= 0) {
-        const labelMatch = lines[titleLineIndex]?.match(/^(?:title|headline)\s*:\s*(.*)$/i)
-        title = (labelMatch?.[1] ?? '').trim() || null
-        titleIndex = titleLineIndex
-      }
-      if (!title) {
-        const headingIndex = lines.findIndex((line) => /^#{1,6}\s+/.test(line))
-        if (headingIndex >= 0) {
-          const headingMatch = lines[headingIndex]?.match(/^#{1,6}\s+(.+)/)
-          const headingText = (headingMatch?.[1] ?? '').trim()
-          const headingLabelMatch = headingText.match(/^(?:title|headline)\s*:\s*(.*)$/i)
-          if (headingLabelMatch) {
-            const headingLabel = (headingLabelMatch[1] ?? '').trim()
-            if (headingLabel) {
-              title = headingLabel
-            } else {
-              const fallbackTitle = (lines[headingIndex + 1] ?? '').trim()
-              if (fallbackTitle) title = fallbackTitle
-            }
-          } else {
-            title = headingText || null
-          }
-          titleIndex = headingIndex
-        }
-      }
-      if (!title && lines.length > 1) {
-        const candidates = lines
-          .map((line, idx) => ({ line, idx }))
-          .filter(({ line }) => isTitleCandidate(line))
-        if (candidates.length === 1) {
-          title = candidates[0]?.line ?? null
-          titleIndex = candidates[0]?.idx ?? null
-        } else if (isTitleCandidate(lines[0] ?? '')) {
-          title = lines[0] ?? null
-          titleIndex = 0
-        }
-      }
-      const bodyLines = lines.filter((line, idx) => {
-        if (titleIndex != null && idx === titleIndex) return false
-        if (/^(?:title|headline)\s*:/i.test(line)) return false
-        if (/^#{1,6}\s+/.test(line)) return false
-        return true
-      })
-      const body = bodyLines.join(' ').trim().replace(/\s+/g, ' ')
-      if (!title && body) {
-        title = deriveHeadlineFromBody(body)
-      }
-      if (body) summaries.set(currentIndex, body)
-      if (title) titles.set(currentIndex, title)
-    }
-    currentIndex = null
-    buffer = []
-    sawBlankAfterTitle = false
+  for (const [index, text] of parsed) {
+    const parsedSlide = splitSlideTitleFromText({ text, slideIndex: index, total })
+    const title = normalizeSlideText(parsedSlide.title ?? '')
+    const body = normalizeSlideText(parsedSlide.body ?? '')
+    if (body) summaries.set(index, body)
+    if (title) titles.set(index, title)
   }
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i] ?? ''
-    const trimmed = line.trim()
-    const heading = trimmed.match(/^#{1,3}\s+\S/)
-    if (heading && !trimmed.toLowerCase().startsWith('### slides')) {
-      flush()
-      break
-    }
-    const match = trimmed.match(SLIDE_TAG_PATTERN)
-    if (match) {
-      flush()
-      const index = Number.parseInt(match[1] ?? '', 10)
-      if (!Number.isFinite(index) || index <= 0) continue
-      currentIndex = index
-      sawBlankAfterTitle = false
-      const rest = (match[2] ?? '').trim()
-      if (rest) buffer.push(rest)
-      continue
-    }
-    const labelMatch = trimmed.match(SLIDE_LABEL_PATTERN)
-    if (labelMatch) {
-      flush()
-      const index = Number.parseInt(labelMatch[1] ?? '', 10)
-      if (!Number.isFinite(index) || index <= 0) continue
-      currentIndex = index
-      sawBlankAfterTitle = false
-      continue
-    }
-    if (currentIndex == null) continue
-    if (!trimmed) {
-      if (buffer.length === 1 && isTitleCandidate(buffer[0] ?? '')) {
-        sawBlankAfterTitle = true
-      }
-      continue
-    }
-    if (
-      sawBlankAfterTitle &&
-      buffer.length === 1 &&
-      isTitleCandidate(buffer[0] ?? '') &&
-      !isTitleCandidate(trimmed) &&
-      !hasFutureMarker(i)
-    ) {
-      flush()
-      break
-    }
-    sawBlankAfterTitle = false
-    buffer.push(trimmed)
-  }
-  flush()
   return { summaries, titles }
+}
+
+function updateSlideSummaryFromMarkdown(
+  markdown: string,
+  opts?: { preserveIfEmpty?: boolean; source?: 'summary' | 'slides' }
+) {
+  const source = opts?.source ?? 'summary'
+  if (source === 'summary' && slideSummarySource === 'slides') return
+  const derived = deriveSlideSummaries(markdown)
+  if (!derived) {
+    if (opts?.preserveIfEmpty) return
+    slideSummaryByIndex = new Map()
+    slideTitleByIndex = new Map()
+    if (source === 'slides') {
+      slideSummarySource = null
+    } else if (!slideSummarySource) {
+      slideSummarySource = 'summary'
+    }
+    rebuildSlideDescriptions()
+    queueSlidesRender()
+    return
+  }
+  slideSummaryByIndex = derived.summaries
+  slideTitleByIndex = derived.titles
+  slideSummarySource = source
+  rebuildSlideDescriptions()
+  queueSlidesRender()
 }
 
 function setSlidesBusy(next: boolean) {
@@ -1372,10 +1287,6 @@ function seekToSlideTimestamp(seconds: number | null | undefined) {
   void send({ type: 'panel:seek', seconds: Math.floor(seconds) })
 }
 
-const SLIDE_TEXT_MIN_CHARS = 120
-const SLIDE_TEXT_MAX_CHARS = 600
-const SLIDE_TEXT_WINDOW_MIN_SECONDS = 30
-const SLIDE_TEXT_WINDOW_MAX_SECONDS = 180
 const SLIDE_OCR_MIN_CHARS = 16
 const SLIDE_OCR_SIGNIFICANT_TOTAL = 200
 const SLIDE_OCR_SIGNIFICANT_SLIDES = 3
@@ -1386,37 +1297,22 @@ const SLIDE_OCR_GIBBERISH_MAX_SYMBOL_RATIO = 0.42
 const SLIDE_OCR_GIBBERISH_WEIRD_SYMBOL_RATIO = 0.08
 const SLIDE_CUSTOM_LENGTH_PATTERN = /^(?<value>\d+(?:\.\d+)?)(?<unit>k|m)?$/i
 
-function resolveLengthTargetCharacters(lengthValue: string): number | null {
+function resolveSlidesLengthArg(
+  lengthValue: string
+): { kind: 'preset'; preset: SummaryLength } | { kind: 'chars'; maxCharacters: number } {
   const normalized = lengthValue.trim().toLowerCase()
   if (Object.hasOwn(SUMMARY_LENGTH_SPECS, normalized)) {
-    const spec = SUMMARY_LENGTH_SPECS[normalized as keyof typeof SUMMARY_LENGTH_SPECS]
-    return spec?.targetCharacters ?? null
+    return { kind: 'preset', preset: normalized as SummaryLength }
   }
   const match = normalized.match(SLIDE_CUSTOM_LENGTH_PATTERN)
-  if (!match) return null
+  if (!match) return { kind: 'preset', preset: 'short' }
   const value = Number(match.groups?.value ?? match[1])
-  if (!Number.isFinite(value) || value <= 0) return null
+  if (!Number.isFinite(value) || value <= 0) {
+    return { kind: 'preset', preset: 'short' }
+  }
   const unit = (match.groups?.unit ?? '').toLowerCase()
   const multiplier = unit === 'm' ? 1_000_000 : unit === 'k' ? 1_000 : 1
-  return Math.round(value * multiplier)
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function resolveSlideTextBudget(lengthValue: string): number {
-  const target =
-    resolveLengthTargetCharacters(lengthValue) ?? SUMMARY_LENGTH_SPECS.short.targetCharacters
-  const perSlide = Math.round(target / 15)
-  return clampNumber(perSlide, SLIDE_TEXT_MIN_CHARS, SLIDE_TEXT_MAX_CHARS)
-}
-
-function resolveSlideWindowSeconds(lengthValue: string): number {
-  const target =
-    resolveLengthTargetCharacters(lengthValue) ?? SUMMARY_LENGTH_SPECS.short.targetCharacters
-  const window = Math.round(target / 100)
-  return clampNumber(window, SLIDE_TEXT_WINDOW_MIN_SECONDS, SLIDE_TEXT_WINDOW_MAX_SECONDS)
+  return { kind: 'chars', maxCharacters: Math.round(value * multiplier) }
 }
 
 function normalizeSlideText(value: string): string {
@@ -1491,54 +1387,6 @@ function truncateSlideText(value: string, limit: number): string {
   return result.length > 0 ? `${result}...` : ''
 }
 
-function parseTranscriptTimedText(input: string | null | undefined): TranscriptSegment[] {
-  if (!input) return []
-  const segments: TranscriptSegment[] = []
-  const lines = input.split('\n')
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed.startsWith('[')) continue
-    const match = trimmed.match(/^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/)
-    if (!match) continue
-    const seconds = parseTimestampSeconds(match[1])
-    if (seconds == null) continue
-    const text = normalizeSlideText(match[2] ?? '')
-    if (!text) continue
-    segments.push({ startSeconds: seconds, text })
-  }
-  segments.sort((a, b) => a.startSeconds - b.startSeconds)
-  return segments
-}
-
-function getTranscriptTextForSlide(
-  slide: { timestamp?: number | null },
-  nextSlide: { timestamp?: number | null } | null,
-  budget: number,
-  windowSeconds: number
-): string {
-  if (slide.timestamp == null || !Number.isFinite(slide.timestamp)) return ''
-  if (slidesTranscriptSegments.length === 0) return ''
-  const start = Math.max(0, Math.floor(slide.timestamp))
-  const leadIn = Math.min(6, Math.floor(windowSeconds * 0.2))
-  const lower = Math.max(0, start - leadIn)
-  let upper = start + windowSeconds
-  if (nextSlide?.timestamp != null && Number.isFinite(nextSlide.timestamp)) {
-    const next = Math.max(start, Math.floor(nextSlide.timestamp))
-    if (next > start) {
-      upper = Math.min(upper, next)
-    }
-  }
-  if (upper < lower) return ''
-  const parts: string[] = []
-  for (const segment of slidesTranscriptSegments) {
-    if (segment.startSeconds < lower) continue
-    if (segment.startSeconds > upper) break
-    parts.push(segment.text)
-  }
-  const text = normalizeSlideText(parts.join(' '))
-  return text ? truncateSlideText(text, budget) : ''
-}
-
 function getOcrTextForSlide(slide: { ocrText?: string | null }, budget: number): string {
   const text = normalizeOcrText(slide.ocrText)
   return text ? truncateSlideText(text, budget) : ''
@@ -1547,8 +1395,24 @@ function getOcrTextForSlide(slide: { ocrText?: string | null }, budget: number):
 function rebuildSlideDescriptions() {
   slideDescriptions = new Map()
   if (!panelState.slides) return
-  const budget = resolveSlideTextBudget(pickerSettings.length)
-  const windowSeconds = resolveSlideWindowSeconds(pickerSettings.length)
+  if (slideSummaryByIndex.size === 0 && slidesSummaryMarkdown.trim()) {
+    const derived = deriveSlideSummaries(slidesSummaryMarkdown)
+    if (derived) {
+      slideSummaryByIndex = derived.summaries
+      slideTitleByIndex = derived.titles
+    }
+  }
+  const lengthArg = resolveSlidesLengthArg(pickerSettings.length)
+  const timeline: SlideTimelineEntry[] = panelState.slides.slides.map((slide) => ({
+    index: slide.index,
+    timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : Number.NaN,
+  }))
+  const fallbackSummaries = buildSlideTextFallback({
+    slides: timeline,
+    transcriptTimedText: slidesTranscriptTimedText,
+    lengthArg,
+  })
+  const budget = resolveSlideTextBudget({ lengthArg, slideCount: timeline.length })
   const hasSummary = slideSummaryByIndex.size > 0
   const effectiveInputMode = inputModeOverride ?? inputMode
   const holdTranscriptFallback =
@@ -1559,20 +1423,19 @@ function rebuildSlideDescriptions() {
   const slides = panelState.slides.slides
   for (let i = 0; i < slides.length; i += 1) {
     const slide = slides[i]
-    const nextSlide = slides[i + 1] ?? null
-    if (slidesTextMode === 'ocr') {
-      slideDescriptions.set(slide.index, getOcrTextForSlide(slide, budget))
-      continue
-    }
     if (hasSummary) {
       slideDescriptions.set(slide.index, slideSummaryByIndex.get(slide.index) ?? '')
+      continue
+    }
+    if (slidesTextMode === 'ocr') {
+      slideDescriptions.set(slide.index, getOcrTextForSlide(slide, budget))
       continue
     }
     if (holdTranscriptFallback) {
       slideDescriptions.set(slide.index, '')
       continue
     }
-    const transcriptText = getTranscriptTextForSlide(slide, nextSlide, budget, windowSeconds)
+    const transcriptText = fallbackSummaries.get(slide.index) ?? ''
     if (!transcriptText) {
       slideDescriptions.set(slide.index, getOcrTextForSlide(slide, budget))
       continue
@@ -1708,7 +1571,14 @@ function applySlidesPayload(data: SseSlidesData) {
       imageUrl: normalizeSlideImageUrl(slide.imageUrl, data.sourceId, slide.index),
     })),
   }
-  const merged = panelState.slides ? mergeSlidesPayload(panelState.slides, normalized) : normalized
+  const shouldReplaceSeeded = slidesSeededSourceId === data.sourceId
+  const merged =
+    !panelState.slides || shouldReplaceSeeded
+      ? normalized
+      : mergeSlidesPayload(panelState.slides, normalized)
+  if (shouldReplaceSeeded) {
+    slidesSeededSourceId = null
+  }
   if (!slidesPayloadChanged(panelState.slides, merged)) return
   panelState.slides = merged
   if (!isSameSource) {
@@ -1731,12 +1601,34 @@ const slidesTestHooks = (
     __summarizeTestHooks?: {
       applySlidesPayload?: (payload: SseSlidesData) => void
       getRunId?: () => string | null
+      getSummaryMarkdown?: () => string
+      getSlideDescriptions?: () => Array<[number, string]>
+      getPhase?: () => PanelPhase
+      getModel?: () => string | null
+      getSlidesTimeline?: () => Array<{ index: number; timestamp: number | null }>
+      getTranscriptTimedText?: () => string | null
+      getSlidesSummaryMarkdown?: () => string
+      getSlidesSummaryComplete?: () => boolean
+      getSlidesSummaryModel?: () => string | null
     }
   }
 ).__summarizeTestHooks
 if (slidesTestHooks) {
   slidesTestHooks.applySlidesPayload = applySlidesPayload
   slidesTestHooks.getRunId = () => panelState.runId
+  slidesTestHooks.getSummaryMarkdown = () => panelState.summaryMarkdown ?? ''
+  slidesTestHooks.getSlideDescriptions = () => Array.from(slideDescriptions.entries())
+  slidesTestHooks.getPhase = () => panelState.phase
+  slidesTestHooks.getModel = () => panelState.lastMeta.model ?? null
+  slidesTestHooks.getSlidesTimeline = () =>
+    panelState.slides?.slides.map((slide) => ({
+      index: slide.index,
+      timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : null,
+    })) ?? []
+  slidesTestHooks.getTranscriptTimedText = () => slidesTranscriptTimedText
+  slidesTestHooks.getSlidesSummaryMarkdown = () => slidesSummaryMarkdown
+  slidesTestHooks.getSlidesSummaryComplete = () => slidesSummaryComplete
+  slidesTestHooks.getSlidesSummaryModel = () => slidesSummaryModel
 }
 
 async function requestSlidesContext() {
@@ -2895,6 +2787,64 @@ function startSlidesStream(run: RunStart) {
   startSlidesStreamForRunId(run.id)
 }
 
+function applySlidesSummaryMarkdown(markdown: string) {
+  if (!markdown.trim()) return
+  if (!slidesEnabledValue) return
+  const effectiveInputMode = inputModeOverride ?? inputMode
+  if (effectiveInputMode !== 'video') return
+  const currentUrl = panelState.currentSource?.url ?? activeTabUrl ?? null
+  if (slidesSummaryUrl && currentUrl && !urlsMatch(slidesSummaryUrl, currentUrl)) return
+  let output = markdown
+  if (panelState.slides?.slides.length) {
+    const lengthArg = resolveSlidesLengthArg(pickerSettings.length)
+    const timeline: SlideTimelineEntry[] = panelState.slides.slides.map((slide) => ({
+      index: slide.index,
+      timestamp: Number.isFinite(slide.timestamp) ? slide.timestamp : Number.NaN,
+    }))
+    output = coerceSummaryWithSlides({
+      markdown,
+      slides: timeline,
+      transcriptTimedText: slidesTranscriptTimedText,
+      lengthArg,
+    })
+  }
+  updateSlideSummaryFromMarkdown(output, { preserveIfEmpty: false, source: 'slides' })
+  if (!panelState.summaryMarkdown?.trim()) {
+    renderMarkdown(output)
+  }
+}
+
+function maybeApplyPendingSlidesSummary() {
+  if (!slidesSummaryPending) return
+  const markdown = slidesSummaryPending
+  slidesSummaryPending = null
+  applySlidesSummaryMarkdown(markdown)
+}
+
+function startSlidesSummaryStreamForRunId(runId: string, targetUrl?: string | null) {
+  const effectiveInputMode = inputModeOverride ?? inputMode
+  if (!slidesEnabledValue || effectiveInputMode !== 'video') {
+    stopSlidesSummaryStream()
+    return
+  }
+  if (slidesSummaryRunId === runId) return
+  stopSlidesSummaryStream()
+  slidesSummaryRunId = runId
+  slidesSummaryUrl = targetUrl ?? null
+  slidesSummaryMarkdown = ''
+  slidesSummaryHadError = false
+  slidesSummaryComplete = false
+  slidesSummaryModel = panelState.lastMeta.model ?? panelState.ui?.settings.model ?? null
+  const url = targetUrl ?? panelState.currentSource?.url ?? activeTabUrl ?? ''
+  void slidesSummaryController.start({
+    id: runId,
+    url,
+    title: panelState.currentSource?.title ?? null,
+    model: panelState.lastMeta.model ?? 'auto',
+    reason: 'slides-summary',
+  })
+}
+
 const slidesHydrator = createSlidesHydrator({
   getToken: async () => (await loadSettings()).token,
   onSlides: (data) => {
@@ -2920,13 +2870,61 @@ const slidesHydrator = createSlidesHydrator({
   },
 })
 
+const slidesSummaryController = createStreamController({
+  getToken: async () => (await loadSettings()).token,
+  onStatus: () => {},
+  onPhaseChange: () => {},
+  onMeta: (meta) => {
+    if (typeof meta.model === 'string') {
+      slidesSummaryModel = meta.model
+    }
+  },
+  idleTimeoutMs: 600_000,
+  idleTimeoutMessage: 'Slides summary stalled. The daemon may have stopped.',
+  onRender: (markdown) => {
+    slidesSummaryMarkdown = markdown
+  },
+  onReset: () => {
+    slidesSummaryMarkdown = ''
+    slidesSummaryPending = null
+    slidesSummaryHadError = false
+    slidesSummaryComplete = false
+    slidesSummaryModel = panelState.lastMeta.model ?? panelState.ui?.settings.model ?? null
+  },
+  onError: (err) => {
+    slidesSummaryHadError = true
+    return friendlyFetchError(err, 'Slides summary failed')
+  },
+  onDone: () => {
+    if (slidesSummaryHadError) {
+      slidesSummaryComplete = false
+      return
+    }
+    slidesSummaryComplete = true
+    const markdown = slidesSummaryMarkdown
+    if (!markdown.trim()) return
+    if (panelState.phase === 'connecting' || panelState.phase === 'streaming') {
+      slidesSummaryPending = markdown
+      return
+    }
+    applySlidesSummaryMarkdown(markdown)
+  },
+})
+
 const streamController = createStreamController({
   getToken: async () => (await loadSettings()).token,
   onReset: () => {
     const preserveChat = preserveChatOnNextReset
     preserveChatOnNextReset = false
     resetSummaryView({ preserveChat, clearRunId: false })
-    panelState.lastMeta = { inputSummary: null, model: null, modelLabel: null }
+    {
+      const fallbackModel = panelState.ui?.settings.model ?? null
+      panelState.lastMeta = {
+        inputSummary: null,
+        model: fallbackModel,
+        modelLabel: fallbackModel,
+      }
+    }
     lastStreamError = null
     if (pendingRunForPlannedSlides) {
       seedPlannedSlidesForRun(pendingRunForPlannedSlides)
@@ -2947,9 +2945,12 @@ const streamController = createStreamController({
     } else {
       setPhase(phase)
     }
-    if (phase === 'idle' && panelState.slides && slideSummaryByIndex.size === 0) {
-      rebuildSlideDescriptions()
-      queueSlidesRender()
+    if (phase === 'idle') {
+      maybeApplyPendingSlidesSummary()
+      if (panelState.slides && slideSummaryByIndex.size === 0) {
+        rebuildSlideDescriptions()
+        queueSlidesRender()
+      }
     }
   },
   onRememberUrl: (url) => void send({ type: 'panel:rememberUrl', url }),
@@ -3279,6 +3280,10 @@ function maybeShowSetup(state: UiState): boolean {
 }
 
 function updateControls(state: UiState) {
+  if (state.panelOpen && !lastPanelOpen) {
+    errorController.clearInlineError()
+  }
+  lastPanelOpen = state.panelOpen
   const nextTabId = state.tab.id ?? null
   const nextTabUrl = state.tab.url ?? null
   const preferUrlMode = nextTabUrl ? shouldPreferUrlMode(nextTabUrl) : false
@@ -3485,6 +3490,7 @@ function handleBgMessage(msg: BgToPanel) {
         return
       }
       startSlidesStreamForRunId(msg.runId)
+      startSlidesSummaryStreamForRunId(msg.runId, targetUrl ?? null)
       return
     }
     case 'slides:context': {
@@ -3492,19 +3498,21 @@ function handleBgMessage(msg: BgToPanel) {
       const expectedId = `slides-${slidesContextRequestId}`
       if (msg.requestId !== expectedId) return
       slidesContextPending = false
-      if (!msg.ok) {
-        setSlidesTranscriptTimedText(null)
-        updateSlidesTextState()
-        if (panelState.summaryMarkdown) {
-          renderInlineSlides(renderMarkdownHostEl, { fallback: true })
-        }
-        return
-      }
-      setSlidesTranscriptTimedText(msg.transcriptTimedText ?? null)
+      setSlidesTranscriptTimedText(msg.ok ? (msg.transcriptTimedText ?? null) : null)
       updateSlidesTextState()
-      if (panelState.summaryMarkdown) {
+      const summarySource =
+        slidesSummaryComplete && slidesSummaryMarkdown.trim()
+          ? slidesSummaryMarkdown
+          : panelState.summaryMarkdown ?? ''
+      if (summarySource) {
+        updateSlideSummaryFromMarkdown(summarySource, {
+          preserveIfEmpty: false,
+          source:
+            slidesSummaryComplete && slidesSummaryMarkdown.trim().length > 0 ? 'slides' : 'summary',
+        })
         renderInlineSlides(renderMarkdownHostEl, { fallback: true })
       }
+      if (!msg.ok) return
       panelCacheController.scheduleSync()
       return
     }
@@ -3536,7 +3544,14 @@ function handleBgMessage(msg: BgToPanel) {
       panelState.slidesRunId = slidesParallelValue ? null : msg.run.id
       panelState.currentSource = { url: msg.run.url, title: msg.run.title }
       currentRunTabId = activeTabId
-      panelState.lastMeta = { inputSummary: null, model: null, modelLabel: null }
+      {
+        const fallbackModel = panelState.ui?.settings.model ?? null
+        panelState.lastMeta = {
+          inputSummary: null,
+          model: fallbackModel,
+          modelLabel: fallbackModel,
+        }
+      }
       pendingRunForPlannedSlides = msg.run
       if (!slidesParallelValue) {
         startSlidesStream(msg.run)
@@ -3583,6 +3598,7 @@ async function send(message: PanelToBg) {
 }
 
 function sendSummarize(opts?: { refresh?: boolean }) {
+  errorController.clearInlineError()
   void send({
     type: 'panel:summarize',
     refresh: Boolean(opts?.refresh),
@@ -3615,9 +3631,8 @@ function seedPlannedSlidesForRun(run: RunStart) {
   const count = Math.max(3, Math.min(80, target))
 
   const youtubeId = extractYouTubeVideoId(run.url)
-  const sourceId = youtubeId ?? `planned-${run.id}`
+  const sourceId = youtubeId ? `youtube-${youtubeId}` : `planned-${run.id}`
   const sourceKind = youtubeId ? 'youtube' : 'direct'
-  const baseImageUrl = youtubeId ? `http://127.0.0.1:8787/v1/slides/${sourceId}` : null
 
   if (
     panelState.slides &&
@@ -3631,7 +3646,7 @@ function seedPlannedSlidesForRun(run: RunStart) {
     const ratio = count <= 1 ? 0 : i / Math.max(1, count - 1)
     const timestamp = Math.max(0, Math.min(durationSeconds - 0.1, ratio * durationSeconds))
     const index = i + 1
-    return { index, timestamp, imageUrl: baseImageUrl ? `${baseImageUrl}/${index}` : '' }
+    return { index, timestamp, imageUrl: '' }
   })
 
   panelState.slides = {
@@ -3641,6 +3656,7 @@ function seedPlannedSlidesForRun(run: RunStart) {
     ocrAvailable: false,
     slides,
   }
+  slidesSeededSourceId = sourceId
   updateSlidesTextState()
   queueSlidesRender()
 }
@@ -4098,6 +4114,7 @@ let panelMarkedOpen = document.visibilityState === 'visible'
 function markPanelOpen() {
   if (panelMarkedOpen) return
   panelMarkedOpen = true
+  errorController.clearInlineError()
   void send({ type: 'panel:ready' })
   scheduleAutoKick()
   void syncWithActiveTab()

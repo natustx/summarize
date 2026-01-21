@@ -401,7 +401,8 @@ export async function runUrlFlow({
       slidesTimelineResolved = true
       resolveSlidesTimeline?.(value)
     }
-    const slidesOutputEnabled = Boolean(flags.slides) && !flags.json && !flags.extractMode
+    const slidesOutputEnabled =
+      Boolean(flags.slides) && flags.slidesOutput !== false && !flags.json && !flags.extractMode
     const slidesOutput = createSlidesTerminalOutput({
       io,
       flags: { plain: flags.plain, lengthArg: flags.lengthArg, slidesDebug: flags.slidesDebug },

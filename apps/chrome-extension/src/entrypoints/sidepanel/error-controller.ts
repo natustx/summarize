@@ -21,8 +21,12 @@ export type ErrorController = {
   clearAll: () => void
 }
 
+const stripInvisible = (message: string) => message.replace(/[\u200B-\u200D\uFEFF]/g, '')
+
+const hasMeaningfulMessage = (message: string) => stripInvisible(message).trim().length > 0
+
 const normalizeMessage = (message: string) => {
-  const trimmed = message.trim()
+  const trimmed = stripInvisible(message).trim()
   return trimmed.length > 0 ? trimmed : 'Something went wrong.'
 }
 
@@ -55,8 +59,7 @@ export const createErrorController = (options: ErrorControllerOptions): ErrorCon
   }
 
   const showPanel = (message: string) => {
-    const trimmed = message.trim()
-    if (!trimmed) {
+    if (!hasMeaningfulMessage(message)) {
       hidePanel()
       return
     }
@@ -67,8 +70,7 @@ export const createErrorController = (options: ErrorControllerOptions): ErrorCon
   }
 
   const showInline = (message: string) => {
-    const trimmed = message.trim()
-    if (!trimmed) {
+    if (!hasMeaningfulMessage(message)) {
       hideInline()
       return
     }

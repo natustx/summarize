@@ -1295,7 +1295,7 @@ export async function runDaemonServer({
         const id = slidesMatch[1]
         const session = id ? sessions.get(id) : null
         if (!session || !session.slides) {
-          json(res, 404, { ok: false, error: 'not found' }, cors)
+          json(res, 200, { ok: false, error: 'not found' }, cors)
           return
         }
         json(

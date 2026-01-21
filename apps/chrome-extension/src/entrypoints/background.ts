@@ -1265,6 +1265,9 @@ export default defineBackground(() => {
         resolvedPayload.media?.hasVideo === true ||
         shouldPreferUrlMode(resolvedPayload.url))
     const wantsParallelSlides = wantsSlides && settings.slidesParallel
+    const summaryTimestamps =
+      wantsSummaryTimestamps || (wantsSlides && !wantsParallelSlides)
+    const slidesTimestamps = wantsSummaryTimestamps || wantsSlides
 
     const resolveSlidesForLength = (
       lengthValue: string,
@@ -1295,7 +1298,7 @@ export default defineBackground(() => {
       reason,
       url: resolvedPayload.url,
       inputMode: effectiveInputMode ?? null,
-      wantsSummaryTimestamps,
+      wantsSummaryTimestamps: summaryTimestamps,
       wantsSlides,
       wantsParallelSlides,
     })
@@ -1341,14 +1344,14 @@ export default defineBackground(() => {
         settings,
         noCache: Boolean(opts?.refresh),
         inputMode: effectiveInputMode,
-        timestamps: wantsSummaryTimestamps,
+        timestamps: summaryTimestamps,
         slides: summarySlides,
       })
       logPanel('summarize:request', {
         url: resolvedPayload.url,
         slides: wantsSlides && !wantsParallelSlides,
         slidesParallel: wantsParallelSlides,
-        timestamps: wantsSummaryTimestamps,
+        timestamps: summaryTimestamps,
       })
       const res = await fetch('http://127.0.0.1:8787/v1/summarize', {
         method: 'POST',
@@ -1389,7 +1392,7 @@ export default defineBackground(() => {
             settings,
             noCache: Boolean(opts?.refresh),
             inputMode: effectiveInputMode,
-            timestamps: wantsSummaryTimestamps,
+            timestamps: slidesTimestamps,
             slides: slidesConfig,
           })
           logPanel('slides:request', { url: resolvedPayload.url })

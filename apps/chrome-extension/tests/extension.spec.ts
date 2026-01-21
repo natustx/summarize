@@ -1,19 +1,53 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import fs from 'node:fs'
 import { createServer as createHttpServer } from 'node:http'
 import { createServer as createNetServer } from 'node:net'
+import os from 'node:os'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { BrowserContext, Page, Worker } from '@playwright/test'
 import { chromium, expect, firefox, test } from '@playwright/test'
 
+import { SUMMARY_LENGTH_SPECS } from '@steipete/summarize-core/prompts'
 import { runDaemonServer } from '../../../src/daemon/server.js'
+import {
+  coerceSummaryWithSlides,
+  parseSlideSummariesFromMarkdown,
+  splitSlideTitleFromText,
+} from '../../../src/run/flows/url/slides-text.js'
+import type { SummaryLength } from '../../../src/shared/contracts.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(__dirname, '..', '..', '..')
 const consoleErrorAllowlist: RegExp[] = []
 const allowFirefoxExtensionTests = process.env.ALLOW_FIREFOX_EXTENSION_TESTS === '1'
+const allowYouTubeE2E = process.env.ALLOW_YOUTUBE_E2E === '1'
+const youtubeEnvUrls =
+  typeof process.env.SUMMARIZE_YOUTUBE_URLS === 'string'
+    ? process.env.SUMMARIZE_YOUTUBE_URLS.split(',').map((value) => value.trim())
+    : []
+const defaultYouTubeUrls = [
+  'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'https://www.youtube.com/watch?v=jNQXAC9IVRw',
+]
+const defaultYouTubeSlidesUrls = [
+  'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+  'https://www.youtube.com/watch?v=jNQXAC9IVRw',
+]
+const youtubeTestUrls =
+  youtubeEnvUrls.filter((value) => value.length > 0).length > 0
+    ? youtubeEnvUrls.filter((value) => value.length > 0)
+    : defaultYouTubeUrls
+const youtubeSlidesEnvUrls =
+  typeof process.env.SUMMARIZE_YOUTUBE_SLIDES_URLS === 'string'
+    ? process.env.SUMMARIZE_YOUTUBE_SLIDES_URLS.split(',').map((value) => value.trim())
+    : []
+const youtubeSlidesTestUrls =
+  youtubeSlidesEnvUrls.filter((value) => value.length > 0).length > 0
+    ? youtubeSlidesEnvUrls.filter((value) => value.length > 0)
+    : defaultYouTubeSlidesUrls
+const SLIDES_MAX = 4
 
 type BrowserType = 'chromium' | 'firefox'
 
@@ -43,6 +77,8 @@ type UiState = {
     chatEnabled: boolean
     automationEnabled: boolean
     slidesEnabled: boolean
+    slidesParallel: boolean
+    slidesLayout?: 'strip' | 'gallery'
     model: string
     length: string
     tokenPresent: boolean
@@ -62,6 +98,8 @@ const defaultUiState: UiState = {
     chatEnabled: true,
     automationEnabled: false,
     slidesEnabled: false,
+    slidesParallel: true,
+    slidesLayout: 'strip',
     model: 'auto',
     length: 'xl',
     tokenPresent: true,
@@ -488,6 +526,11 @@ function hasFfmpeg(): boolean {
   return result.status === 0
 }
 
+function hasYtDlp(): boolean {
+  const result = spawnSync('yt-dlp', ['--version'], { stdio: 'ignore' })
+  return result.status === 0
+}
+
 async function isPortInUse(port: number): Promise<boolean> {
   return await new Promise((resolve) => {
     const server = createNetServer()
@@ -587,9 +630,10 @@ async function startDaemonSlidesRun(url: string, token: string): Promise<string>
 }
 
 function readDaemonToken(): string | null {
-  const envToken = typeof process.env.SUMMARIZE_DAEMON_TOKEN === 'string'
-    ? process.env.SUMMARIZE_DAEMON_TOKEN.trim()
-    : ''
+  const envToken =
+    typeof process.env.SUMMARIZE_DAEMON_TOKEN === 'string'
+      ? process.env.SUMMARIZE_DAEMON_TOKEN.trim()
+      : ''
   if (envToken) return envToken
   try {
     const raw = fs.readFileSync(path.join(os.homedir(), '.summarize', 'daemon.json'), 'utf8')
@@ -599,6 +643,238 @@ function readDaemonToken(): string | null {
   } catch {
     return null
   }
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function tokenizeForOverlap(value: string): Set<string> {
+  const cleaned = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2)
+  return new Set(cleaned)
+}
+
+function overlapRatio(a: string, b: string): number {
+  const aTokens = tokenizeForOverlap(a)
+  const bTokens = tokenizeForOverlap(b)
+  if (aTokens.size === 0 || bTokens.size === 0) return 0
+  let intersection = 0
+  for (const token of aTokens) {
+    if (bTokens.has(token)) intersection += 1
+  }
+  return intersection / Math.min(aTokens.size, bTokens.size)
+}
+
+const SLIDE_CUSTOM_LENGTH_PATTERN = /^(?<value>\d+(?:\.\d+)?)(?<unit>k|m)?$/i
+
+function resolveSlidesLengthArg(
+  lengthValue: string
+): { kind: 'preset'; preset: SummaryLength } | { kind: 'chars'; maxCharacters: number } {
+  const normalized = lengthValue.trim().toLowerCase()
+  if (Object.hasOwn(SUMMARY_LENGTH_SPECS, normalized)) {
+    return { kind: 'preset', preset: normalized as SummaryLength }
+  }
+  const match = normalized.match(SLIDE_CUSTOM_LENGTH_PATTERN)
+  if (!match) return { kind: 'preset', preset: 'short' }
+  const value = Number(match.groups?.value ?? match[1])
+  if (!Number.isFinite(value) || value <= 0) {
+    return { kind: 'preset', preset: 'short' }
+  }
+  const unit = (match.groups?.unit ?? '').toLowerCase()
+  const multiplier = unit === 'm' ? 1_000_000 : unit === 'k' ? 1_000 : 1
+  return { kind: 'chars', maxCharacters: Math.round(value * multiplier) }
+}
+
+function parseSlidesFromSummary(markdown: string): Array<{ index: number; text: string }> {
+  const summaries = parseSlideSummariesFromMarkdown(markdown)
+  if (summaries.size === 0) return []
+  const total = summaries.size
+  const entries: Array<{ index: number; text: string }> = []
+  for (const [index, text] of summaries.entries()) {
+    const parsed = splitSlideTitleFromText({ text, slideIndex: index, total })
+    const body = normalizeWhitespace(parsed.body ?? '')
+    entries.push({ index, text: body })
+  }
+  entries.sort((a, b) => a.index - b.index)
+  return entries
+}
+
+function runCliSummary(url: string, args: string[]): string {
+  const env = { ...process.env, NO_COLOR: '1' }
+  delete env.FORCE_COLOR
+  const result = spawnSync('pnpm', ['-s', 'summarize', '--', ...args, url], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 50 * 1024 * 1024,
+    env,
+  })
+  if (result.status !== 0) {
+    const stderr = result.stderr ? result.stderr.toString().trim() : ''
+    const stdout = result.stdout ? result.stdout.toString().trim() : ''
+    throw new Error(`CLI summarize failed (${result.status}): ${stderr || stdout}`)
+  }
+  const output = result.stdout?.toString().trim() ?? ''
+  if (!output) {
+    throw new Error('CLI summarize returned empty output')
+  }
+  const parsed = JSON.parse(output) as { summary?: string | null }
+  if (!parsed.summary) {
+    throw new Error('CLI summarize JSON missing summary')
+  }
+  return parsed.summary
+}
+
+async function startDaemonSummaryRun({
+  url,
+  token,
+  length,
+  slides,
+  slidesMax,
+}: {
+  url: string
+  token: string
+  length: string
+  slides: boolean
+  slidesMax?: number
+}): Promise<string> {
+  const res = await fetch('http://127.0.0.1:8787/v1/summarize', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      url,
+      mode: 'url',
+      videoMode: 'transcript',
+      timestamps: true,
+      length,
+      model: 'auto',
+      ...(slides
+        ? {
+            slides: true,
+            slidesOcr: true,
+            ...(typeof slidesMax === 'number' && Number.isFinite(slidesMax)
+              ? { slidesMax }
+              : {}),
+          }
+        : {}),
+      maxCharacters: null,
+    }),
+  })
+  const json = (await res.json()) as { ok?: boolean; id?: string; error?: string }
+  if (!res.ok || !json.ok || !json.id) {
+    throw new Error(json.error || `${res.status} ${res.statusText}`)
+  }
+  return json.id
+}
+
+async function getPanelPhase(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getPhase?: () => string }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getPhase?.() ?? null
+  })
+}
+
+async function getPanelSummaryMarkdown(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getSummaryMarkdown?: () => string }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSummaryMarkdown?.() ?? ''
+  })
+}
+
+async function getPanelModel(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getModel?: () => string | null }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getModel?.() ?? null
+  })
+}
+
+async function getPanelSlidesTimeline(
+  page: Page
+): Promise<Array<{ index: number; timestamp: number | null }>> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: {
+          getSlidesTimeline?: () => Array<{ index: number; timestamp: number | null }>
+        }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSlidesTimeline?.() ?? []
+  })
+}
+
+async function getPanelTranscriptTimedText(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getTranscriptTimedText?: () => string | null }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getTranscriptTimedText?.() ?? null
+  })
+}
+
+async function getPanelSlidesSummaryMarkdown(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getSlidesSummaryMarkdown?: () => string }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSlidesSummaryMarkdown?.() ?? ''
+  })
+}
+
+async function getPanelSlidesSummaryComplete(page: Page): Promise<boolean> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getSlidesSummaryComplete?: () => boolean }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSlidesSummaryComplete?.() ?? false
+  })
+}
+
+async function getPanelSlidesSummaryModel(page: Page): Promise<string | null> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getSlidesSummaryModel?: () => string | null }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSlidesSummaryModel?.() ?? null
+  })
+}
+
+async function getPanelSlideDescriptions(page: Page): Promise<Array<[number, string]>> {
+  return await page.evaluate(() => {
+    const hooks = (
+      window as typeof globalThis & {
+        __summarizeTestHooks?: { getSlideDescriptions?: () => Array<[number, string]> }
+      }
+    ).__summarizeTestHooks
+    return hooks?.getSlideDescriptions?.() ?? []
+  })
 }
 
 test('sidepanel loads without runtime errors', async ({ browserName: _browserName }, testInfo) => {
@@ -1587,12 +1863,15 @@ test('sidepanel extracts slides from local video via daemon', async ({
 
     const img = page.locator('img.slideStrip__thumbImage, img.slideInline__thumbImage')
     await expect
-      .poll(async () => {
-        const count = await img.count()
-        if (count === 0) return false
-        const ready = await img.first().evaluate((node) => node.dataset.loaded === 'true')
-        return ready
-      }, { timeout: 120_000 })
+      .poll(
+        async () => {
+          const count = await img.count()
+          if (count === 0) return false
+          const ready = await img.first().evaluate((node) => node.dataset.loaded === 'true')
+          return ready
+        },
+        { timeout: 120_000 }
+      )
       .toBe(true)
 
     assertNoErrors(harness)
@@ -1606,6 +1885,277 @@ test('sidepanel extracts slides from local video via daemon', async ({
     fs.rmSync(tmpDir, { recursive: true, force: true })
     if (homeDir) fs.rmSync(homeDir, { recursive: true, force: true })
   }
+})
+
+test.describe('youtube e2e', () => {
+  test('youtube regular summary matches cli output', async ({
+    browserName: _browserName,
+  }, testInfo) => {
+    test.setTimeout(900_000)
+    if (!allowYouTubeE2E) {
+      test.skip(true, 'Set ALLOW_YOUTUBE_E2E=1 to run YouTube E2E tests.')
+    }
+    if (testInfo.project.name === 'firefox') {
+      test.skip(true, 'YouTube E2E is only validated in Chromium.')
+    }
+    const token = readDaemonToken()
+    if (!token) {
+      test.skip(
+        true,
+        'Daemon token missing (set SUMMARIZE_DAEMON_TOKEN or ~/.summarize/daemon.json).'
+      )
+    }
+    if (!(await isPortInUse(DAEMON_PORT))) {
+      test.skip(true, `Daemon must be running on ${DAEMON_PORT}.`)
+    }
+
+    const harness = await launchExtension(getBrowserFromProject(testInfo.project.name))
+
+    try {
+      const length = 'short'
+      await seedSettings(harness, {
+        token,
+        autoSummarize: false,
+        slidesEnabled: false,
+        slidesParallel: true,
+        length,
+      })
+
+      const page = await openExtensionPage(harness, 'sidepanel.html', '#title', () => {
+        ;(
+          window as typeof globalThis & { __summarizeTestHooks?: Record<string, unknown> }
+        ).__summarizeTestHooks = {}
+      })
+      await waitForPanelPort(page)
+
+      const contentPage = await harness.context.newPage()
+
+      for (const url of youtubeTestUrls) {
+        const runId = await startDaemonSummaryRun({ url, token, length, slides: false })
+
+        await contentPage.goto(url, { waitUntil: 'domcontentloaded' })
+        await maybeBringToFront(contentPage)
+        await activateTabByUrl(harness, 'https://www.youtube.com/watch')
+        await waitForActiveTabUrl(harness, 'https://www.youtube.com/watch')
+        const activeTabId = await getActiveTabId(harness)
+
+        await sendBgMessage(harness, {
+          type: 'ui:state',
+          state: buildUiState({
+            tab: { id: activeTabId, url, title: 'YouTube' },
+            media: { hasVideo: true, hasAudio: false, hasCaptions: true },
+            settings: { autoSummarize: false, slidesEnabled: false, slidesParallel: true, length },
+          }),
+        })
+
+        await sendBgMessage(harness, {
+          type: 'run:start',
+          run: { id: runId, url, title: 'YouTube', model: 'auto', reason: 'test' },
+        })
+
+        await expect.poll(async () => await getPanelPhase(page), { timeout: 420_000 }).toBe('idle')
+
+        await expect
+          .poll(async () => (await getPanelModel(page)) ?? '', { timeout: 120_000 })
+          .not.toBe('')
+        const model = (await getPanelModel(page)) ?? 'auto'
+
+        const cliSummary = runCliSummary(url, [
+          '--json',
+          '--length',
+          length,
+          '--language',
+          'auto',
+          '--model',
+          model,
+          '--video-mode',
+          'transcript',
+          '--timestamps',
+        ])
+        const panelSummary = await getPanelSummaryMarkdown(page)
+        const normalizedPanel = normalizeWhitespace(panelSummary)
+        const normalizedCli = normalizeWhitespace(cliSummary)
+        expect(normalizedPanel.length).toBeGreaterThan(0)
+        expect(normalizedCli.length).toBeGreaterThan(0)
+        expect(overlapRatio(normalizedPanel, normalizedCli)).toBeGreaterThan(0.2)
+      }
+
+      assertNoErrors(harness)
+    } finally {
+      await closeExtension(harness.context, harness.userDataDir)
+    }
+  })
+
+  test('youtube slides summary matches cli output', async ({
+    browserName: _browserName,
+  }, testInfo) => {
+    test.setTimeout(1_200_000)
+    if (!allowYouTubeE2E) {
+      test.skip(true, 'Set ALLOW_YOUTUBE_E2E=1 to run YouTube E2E tests.')
+    }
+    if (testInfo.project.name === 'firefox') {
+      test.skip(true, 'YouTube E2E is only validated in Chromium.')
+    }
+    if (!hasFfmpeg() || !hasYtDlp()) {
+      test.skip(true, 'yt-dlp + ffmpeg are required for YouTube slide extraction.')
+    }
+    const token = readDaemonToken()
+    if (!token) {
+      test.skip(
+        true,
+        'Daemon token missing (set SUMMARIZE_DAEMON_TOKEN or ~/.summarize/daemon.json).'
+      )
+    }
+    if (!(await isPortInUse(DAEMON_PORT))) {
+      test.skip(true, `Daemon must be running on ${DAEMON_PORT}.`)
+    }
+
+    const harness = await launchExtension(getBrowserFromProject(testInfo.project.name))
+
+    try {
+      const length = 'short'
+      await seedSettings(harness, {
+        token,
+        autoSummarize: false,
+        slidesEnabled: true,
+        slidesParallel: true,
+        length,
+      })
+
+      const page = await openExtensionPage(harness, 'sidepanel.html', '#title', () => {
+        ;(
+          window as typeof globalThis & { __summarizeTestHooks?: Record<string, unknown> }
+        ).__summarizeTestHooks = {}
+      })
+      await waitForPanelPort(page)
+
+      const contentPage = await harness.context.newPage()
+
+      for (const url of youtubeSlidesTestUrls) {
+        const summaryRunId = await startDaemonSummaryRun({ url, token, length, slides: false })
+        const slidesRunId = await startDaemonSummaryRun({
+          url,
+          token,
+          length,
+          slides: true,
+          slidesMax: SLIDES_MAX,
+        })
+
+        await contentPage.goto(url, { waitUntil: 'domcontentloaded' })
+        await maybeBringToFront(contentPage)
+        await activateTabByUrl(harness, 'https://www.youtube.com/watch')
+        await waitForActiveTabUrl(harness, 'https://www.youtube.com/watch')
+        const activeTabId = await getActiveTabId(harness)
+
+        await sendBgMessage(harness, {
+          type: 'ui:state',
+          state: buildUiState({
+            tab: { id: activeTabId, url, title: 'YouTube' },
+            media: { hasVideo: true, hasAudio: false, hasCaptions: true },
+            settings: { autoSummarize: false, slidesEnabled: true, slidesParallel: true, length },
+          }),
+        })
+
+        await sendBgMessage(harness, {
+          type: 'run:start',
+          run: { id: summaryRunId, url, title: 'YouTube', model: 'auto', reason: 'test' },
+        })
+        await sendBgMessage(harness, {
+          type: 'slides:run',
+          ok: true,
+          runId: slidesRunId,
+          url,
+        })
+
+        await expect.poll(async () => await getPanelPhase(page), { timeout: 420_000 }).toBe('idle')
+
+        await expect
+          .poll(async () => (await getPanelModel(page)) ?? '', { timeout: 120_000 })
+          .not.toBe('')
+        const model = (await getPanelModel(page)) ?? 'auto'
+
+        await expect
+          .poll(async () => (await getPanelSlidesTimeline(page)).length, { timeout: 600_000 })
+          .toBeGreaterThan(0)
+        const slidesTimeline = await getPanelSlidesTimeline(page)
+        const transcriptTimedText = await getPanelTranscriptTimedText(page)
+        await expect
+          .poll(async () => (await getPanelSlidesSummaryModel(page)) ?? '', { timeout: 120_000 })
+          .not.toBe('')
+        await expect
+          .poll(async () => await getPanelSlidesSummaryComplete(page), { timeout: 600_000 })
+          .toBe(true)
+        const slidesModel = (await getPanelSlidesSummaryModel(page)) ?? model
+        const cliSummary = runCliSummary(url, [
+          '--slides',
+          '--slides-ocr',
+          '--slides-max',
+          String(SLIDES_MAX),
+          '--json',
+          '--length',
+          length,
+          '--language',
+          'auto',
+          '--model',
+          slidesModel,
+          '--video-mode',
+          'transcript',
+          '--timestamps',
+        ])
+        const lengthArg = resolveSlidesLengthArg(length)
+        const coercedSummary = coerceSummaryWithSlides({
+          markdown: cliSummary,
+          slides: slidesTimeline,
+          transcriptTimedText: transcriptTimedText ?? null,
+          lengthArg,
+        })
+        if (process.env.SUMMARIZE_DEBUG_SLIDES === '1') {
+          const panelSummary = await getPanelSummaryMarkdown(page)
+          const slidesSummary = await getPanelSlidesSummaryMarkdown(page)
+          const slidesSummaryComplete = await getPanelSlidesSummaryComplete(page)
+          const slidesSummaryModel = await getPanelSlidesSummaryModel(page)
+          fs.writeFileSync('/tmp/summarize-slides-cli.md', cliSummary)
+          fs.writeFileSync('/tmp/summarize-slides-panel.md', slidesSummary)
+          console.log('[slides-debug]', {
+            url,
+            panelSummaryLength: panelSummary.length,
+            slidesSummaryLength: slidesSummary.length,
+            slidesSummaryComplete,
+            slidesSummaryModel,
+          })
+        }
+        const expectedSlides = parseSlidesFromSummary(coercedSummary)
+        expect(expectedSlides.length).toBeGreaterThan(0)
+
+        await expect
+          .poll(async () => (await getPanelSlideDescriptions(page)).length, { timeout: 600_000 })
+          .toBeGreaterThan(0)
+        const panelSlides = (await getPanelSlideDescriptions(page))
+          .map(([index, text]) => ({ index, text: normalizeWhitespace(text) }))
+          .sort((a, b) => a.index - b.index)
+
+        const panelIndexes = panelSlides.map((entry) => entry.index)
+        const expectedIndexes = expectedSlides.map((entry) => entry.index)
+        expect(panelIndexes).toEqual(expectedIndexes)
+
+        for (let i = 0; i < expectedSlides.length; i += 1) {
+          const expected = expectedSlides[i]
+          const actual = panelSlides[i]
+          if (!expected || !actual) continue
+          if (!expected.text) {
+            expect(actual.text).toBe('')
+            continue
+          }
+          expect(actual.text.length).toBeGreaterThan(0)
+          expect(overlapRatio(actual.text, expected.text)).toBeGreaterThan(0.25)
+        }
+      }
+
+      assertNoErrors(harness)
+    } finally {
+      await closeExtension(harness.context, harness.userDataDir)
+    }
+  })
 })
 
 test('sidepanel shows an error when agent request fails', async ({

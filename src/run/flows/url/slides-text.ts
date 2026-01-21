@@ -1,4 +1,4 @@
-import { extractYouTubeVideoId } from '../../../content/index.js'
+import { extractYouTubeVideoId } from '@steipete/summarize-core/content/url'
 import type { SummaryLength } from '../../../shared/contracts.js'
 
 export type TranscriptSegment = { startSeconds: number; text: string }
@@ -219,7 +219,10 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
   const result = new Map<number, string>()
   if (!markdown.trim()) return result
   const start = findSlidesSectionStart(markdown)
-  if (start == null) return result
+  if (start == null) {
+    const inline = parseInlineSlideSummaries(markdown)
+    return inline.size > 0 ? inline : result
+  }
   const slice = markdown.slice(start)
   const lines = slice.split('\n')
   let currentIndex: number | null = null
@@ -291,6 +294,30 @@ export function parseSlideSummariesFromMarkdown(markdown: string): Map<number, s
     buffer.push(trimmed)
   }
   flush()
+  return result
+}
+
+function parseInlineSlideSummaries(markdown: string): Map<number, string> {
+  const result = new Map<number, string>()
+  const matches = Array.from(markdown.matchAll(/\[slide:(\d+)\]/gi))
+  if (matches.length === 0) return result
+  for (let i = 0; i < matches.length; i += 1) {
+    const match = matches[i]
+    const index = Number.parseInt(match?.[1] ?? '', 10)
+    if (!Number.isFinite(index) || index <= 0) continue
+    const start = (match.index ?? 0) + match[0].length
+    const next = i + 1 < matches.length ? matches[i + 1] : null
+    const end = next?.index ?? markdown.length
+    if (end <= start) {
+      result.set(index, '')
+      continue
+    }
+    const segment = markdown
+      .slice(start, end)
+      .replace(/^\s*[:\-\u2013\u2014]?\s*/, '')
+      .trim()
+    result.set(index, segment)
+  }
   return result
 }
 

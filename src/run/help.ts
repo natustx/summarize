@@ -33,9 +33,8 @@ export function buildProgram() {
         .default('auto')
     )
     .option(
-      '--slides',
-      'Extract slides for YouTube/direct video URLs and render them inline inside the summary narrative (when supported). Combine with --extract to interleave slides in the full transcript.',
-      false
+      '--slides [value]',
+      'Extract slides for YouTube/direct video URLs and render them inline inside the summary narrative (when supported). Combine with --extract to interleave slides in the full transcript.'
     )
     .option('--slides-debug', 'Show slide image paths instead of rendering inline images.', false)
     .option('--slides-ocr', 'Run OCR on extracted slides (requires tesseract).', false)

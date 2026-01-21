@@ -64,6 +64,7 @@ export type UrlFlowFlags = {
   configModelLabel: string | null
   slides: SlideSettings | null
   slidesDebug: boolean
+  slidesOutput?: boolean
 }
 
 export type UrlFlowModel = {
