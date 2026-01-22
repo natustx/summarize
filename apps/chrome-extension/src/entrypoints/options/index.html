@@ -76,6 +76,17 @@
             Advanced
           </button>
           <button
+            id="tab-processes"
+            class="tabButton"
+            type="button"
+            role="tab"
+            data-tab="processes"
+            aria-controls="panel-processes"
+            aria-selected="false"
+          >
+            Processes
+          </button>
+          <button
             id="tab-logs"
             class="tabButton"
             type="button"
@@ -378,6 +389,16 @@
               </div>
             </div>
           </section>
+        </div>
+
+        <div
+          id="panel-processes"
+          class="tabPanel"
+          role="tabpanel"
+          data-tab-panel="processes"
+          aria-labelledby="tab-processes"
+          hidden
+        >
           <section class="section">
             <div class="processHeader">
               <div>
