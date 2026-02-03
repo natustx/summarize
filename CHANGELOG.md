@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.10 - Unreleased
+## 0.11 - Unreleased
+
+### Fixes
+
+- Daemon: resolve symlinked/global bin paths and Windows shims when locating the CLI for install (#62, thanks @entropyy0).
+- CLI: honor --lang for YouTube transcript→Markdown conversion in --markdown-mode llm (#56, thanks @entropyy0).
+
+## 0.10.0 - 2026-01-22
 
 ### Highlights
 
@@ -49,8 +56,6 @@
 - Extract-only: remove implicit 8k cap; new `--max-extract-characters`/daemon `maxExtractCharacters` allow opt-in limits; resolves transcript truncation.
 - Automation: require userScripts (no isolated-world fallback), with improved guidance and in-panel permission notice.
 - Daemon: avoid URL flow crashes when url-preference helpers are missing (ReferenceError guard).
-- Daemon: resolve symlinked/global bin paths and Windows shims when locating the CLI for install (#62, thanks @entropyy0).
-- CLI: honor --lang for YouTube transcript→Markdown conversion in --markdown-mode llm (#56, thanks @entropyy0).
 - CLI: clear OSC progress on SIGINT/SIGTERM to avoid stuck indicators.
 - Slides: detect headline-style first lines and render them as slide titles (no required `Title:` markers).
 - YouTube: prefer English caption variants (`en-*`) when selecting caption tracks.
