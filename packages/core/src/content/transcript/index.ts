@@ -4,12 +4,6 @@ import type {
   TranscriptDiagnostics,
   TranscriptResolution,
 } from "../link-preview/types.js";
-import type {
-  ProviderContext,
-  ProviderFetchOptions,
-  ProviderModule,
-  ProviderResult,
-} from "./types.js";
 import { mapCachedSource, readTranscriptCache, writeTranscriptCache } from "./cache.js";
 import {
   canHandle as canHandleGeneric,
@@ -24,6 +18,12 @@ import {
   fetchTranscript as fetchYoutube,
 } from "./providers/youtube.js";
 import { resolveTranscriptionConfig } from "./transcription-config.js";
+import type {
+  ProviderContext,
+  ProviderFetchOptions,
+  ProviderModule,
+  ProviderResult,
+} from "./types.js";
 import {
   extractEmbeddedYouTubeUrlFromHtml,
   extractYouTubeVideoId as extractYouTubeVideoIdInternal,

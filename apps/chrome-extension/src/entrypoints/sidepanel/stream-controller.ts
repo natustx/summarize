@@ -1,4 +1,3 @@
-import type { PanelPhase, RunStart } from "./types";
 import {
   parseSseEvent,
   type SseMetaData,
@@ -6,6 +5,7 @@ import {
 } from "../../../../../src/shared/sse-events.js";
 import { mergeStreamingChunk } from "../../../../../src/shared/streaming-merge.js";
 import { parseSseStream, type SseMessage } from "../../lib/sse";
+import type { PanelPhase, RunStart } from "./types";
 
 export type StreamController = {
   start: (run: RunStart) => Promise<void>;

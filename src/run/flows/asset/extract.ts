@@ -1,5 +1,4 @@
 import type { ExecFileFn } from "../../../markitdown.js";
-import type { ExtractDiagnosticsForFinishLine } from "../../finish-line.js";
 import { convertToMarkdownWithMarkitdown } from "../../../markitdown.js";
 import { formatBytes } from "../../../tty/format.js";
 import {
@@ -10,6 +9,7 @@ import {
 } from "../../attachments.js";
 import { MAX_TEXT_BYTES_DEFAULT } from "../../constants.js";
 import { hasUvxCli } from "../../env.js";
+import type { ExtractDiagnosticsForFinishLine } from "../../finish-line.js";
 import { withUvxTip } from "../../tips.js";
 
 export type AssetExtractContext = {

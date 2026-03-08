@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { EnvSnapshot } from "./env-snapshot.js";
 import { DAEMON_CONFIG_DIR, DAEMON_CONFIG_FILENAME, DAEMON_PORT_DEFAULT } from "./constants.js";
+import type { EnvSnapshot } from "./env-snapshot.js";
 
 export type DaemonConfigV1 = {
   version: 1;

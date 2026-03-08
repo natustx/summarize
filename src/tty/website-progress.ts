@@ -1,9 +1,9 @@
 import type { LinkPreviewProgressEvent } from "@steipete/summarize-core/content";
-import type { OscProgressController } from "./osc-progress.js";
-import type { ThemeRenderer } from "./theme.js";
 import { formatBytes } from "./format.js";
+import type { OscProgressController } from "./osc-progress.js";
 import { createFetchHtmlProgressRenderer } from "./progress/fetch-html.js";
 import { createTranscriptProgressRenderer } from "./progress/transcript.js";
+import type { ThemeRenderer } from "./theme.js";
 
 export function createWebsiteProgress({
   enabled,

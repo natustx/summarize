@@ -1,7 +1,6 @@
+import { resolveTranscriptForLink } from "../../transcript/index.js";
 import type { FirecrawlScrapeResult, LinkPreviewDeps } from "../deps.js";
 import type { FirecrawlDiagnostics } from "../types.js";
-import type { ExtractedLinkContent, FetchLinkContentOptions } from "./types.js";
-import { resolveTranscriptForLink } from "../../transcript/index.js";
 import { extractArticleContent, extractPlainText } from "./article.js";
 import { normalizeForPrompt } from "./cleaner.js";
 import {
@@ -14,6 +13,7 @@ import {
 import { extractJsonLdContent } from "./jsonld.js";
 import { extractMetadataFromFirecrawl, extractMetadataFromHtml } from "./parsers.js";
 import { isPodcastHost, isPodcastLikeJsonLdType } from "./podcast-utils.js";
+import type { ExtractedLinkContent, FetchLinkContentOptions } from "./types.js";
 import {
   appendNote,
   ensureTranscriptDiagnostics,

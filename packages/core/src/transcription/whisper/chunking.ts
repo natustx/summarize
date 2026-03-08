@@ -1,12 +1,12 @@
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runFfmpegSegment } from "./ffmpeg.js";
 import type {
   TranscriptionProvider,
   WhisperProgressEvent,
   WhisperTranscriptionResult,
 } from "./types.js";
-import { runFfmpegSegment } from "./ffmpeg.js";
 
 export async function transcribeChunkedFile({
   filePath,

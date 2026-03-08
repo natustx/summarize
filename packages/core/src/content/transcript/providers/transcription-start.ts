@@ -1,4 +1,3 @@
-import type { TranscriptionProviderHint } from "../../link-preview/deps.js";
 import { isOnnxCliConfigured, resolvePreferredOnnxModel } from "../../../transcription/onnx-cli.js";
 import {
   isWhisperCppReady,
@@ -9,6 +8,7 @@ import {
   buildCloudProviderHint,
 } from "../../../transcription/whisper/cloud-providers.js";
 import { resolveGeminiTranscriptionModel } from "../../../transcription/whisper/provider-setup.js";
+import type { TranscriptionProviderHint } from "../../link-preview/deps.js";
 import { resolveTranscriptionConfig, type TranscriptionConfig } from "../transcription-config.js";
 
 type Env = Record<string, string | undefined>;

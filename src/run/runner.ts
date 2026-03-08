@@ -1,8 +1,6 @@
-import { CommanderError } from "commander";
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import type { ExecFileFn } from "../markitdown.js";
-import type { FixedModelSpec } from "../model-spec.js";
+import { CommanderError } from "commander";
 import {
   type CacheState,
   clearCacheFiles,
@@ -16,6 +14,8 @@ import {
   parseMetricsMode,
   parseStreamMode,
 } from "../flags.js";
+import type { ExecFileFn } from "../markitdown.js";
+import type { FixedModelSpec } from "../model-spec.js";
 import { resolveSlideSettings } from "../slides/index.js";
 import {
   createThemeRenderer,

@@ -1,7 +1,7 @@
 import type { Context, Message } from "@mariozechner/pi-ai";
 import type { SummarizeConfig } from "../config.js";
-import type { LlmApiKeys } from "../llm/generate-text.js";
 import { runCliModel } from "../llm/cli.js";
+import type { LlmApiKeys } from "../llm/generate-text.js";
 import { streamTextWithContext } from "../llm/generate-text.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
 import { parseRequestedModelId } from "../model-spec.js";

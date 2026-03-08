@@ -1,11 +1,10 @@
 import { countTokens } from "gpt-tokenizer";
 import { createMarkdownStreamer, render as renderMarkdownAnsi } from "markdansi";
 import type { CliProvider } from "../config.js";
-import type { Prompt } from "../llm/prompt.js";
-import type { ModelAttempt, ModelMeta } from "./types.js";
 import { isCliDisabled, runCliModel } from "../llm/cli.js";
 import { streamTextWithModelId } from "../llm/generate-text.js";
 import { parseGatewayStyleModelId } from "../llm/model-id.js";
+import type { Prompt } from "../llm/prompt.js";
 import { formatCompactCount } from "../tty/format.js";
 import { createRetryLogger, writeVerbose } from "./logging.js";
 import { prepareMarkdownForTerminalStreaming } from "./markdown.js";
@@ -18,6 +17,7 @@ import {
 } from "./streaming.js";
 import { resolveModelIdForLlmCall, summarizeWithModelId } from "./summary-llm.js";
 import { isRichTty, markdownRenderWidth, supportsColor } from "./terminal.js";
+import type { ModelAttempt, ModelMeta } from "./types.js";
 
 export type SummaryEngineDeps = {
   env: Record<string, string | undefined>;

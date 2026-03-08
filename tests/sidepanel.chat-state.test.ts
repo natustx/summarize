@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { ChatMessage } from "../apps/chrome-extension/src/entrypoints/sidepanel/types";
 import {
   buildChatRequestMessages,
   compactChatHistory,
   computeChatContextUsage,
   hasUserChatMessage,
 } from "../apps/chrome-extension/src/entrypoints/sidepanel/chat-state";
+import type { ChatMessage } from "../apps/chrome-extension/src/entrypoints/sidepanel/types";
 
 const limits = { maxMessages: 3, maxChars: 10 };
 

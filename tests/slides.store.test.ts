@@ -2,7 +2,6 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { SlideExtractionResult } from "../src/slides/types.js";
 import { resolveSlideSettings } from "../src/slides/settings.js";
 import {
   buildSlidesDirId,
@@ -12,6 +11,7 @@ import {
   serializeSlideImagePath,
   validateSlidesCache,
 } from "../src/slides/store.js";
+import type { SlideExtractionResult } from "../src/slides/types.js";
 
 describe("slides store", () => {
   it("serializes relative paths and resolves cached slides", async () => {

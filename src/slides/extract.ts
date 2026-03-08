@@ -3,8 +3,17 @@ import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ExtractedLinkContent, MediaCache } from "../content/index.js";
+import { extractYouTubeVideoId, isDirectMediaUrl, isYouTubeUrl } from "../content/index.js";
 import type { ProcessHandle } from "../processes.js";
+import { spawnTracked } from "../processes.js";
+import { resolveExecutableInPath } from "../run/env.js";
 import type { SlideSettings } from "./settings.js";
+import {
+  buildSlidesDirId,
+  readSlidesCacheIfValid,
+  resolveSlidesDir,
+  serializeSlideImagePath,
+} from "./store.js";
 import type {
   SlideAutoTune,
   SlideExtractionResult,
@@ -12,15 +21,6 @@ import type {
   SlideSource,
   SlideSourceKind,
 } from "./types.js";
-import { extractYouTubeVideoId, isDirectMediaUrl, isYouTubeUrl } from "../content/index.js";
-import { spawnTracked } from "../processes.js";
-import { resolveExecutableInPath } from "../run/env.js";
-import {
-  buildSlidesDirId,
-  readSlidesCacheIfValid,
-  resolveSlidesDir,
-  serializeSlideImagePath,
-} from "./store.js";
 
 const FFMPEG_TIMEOUT_FALLBACK_MS = 300_000;
 const slidesLocks = new Map<string, Promise<void>>();

@@ -1,6 +1,3 @@
-import type { BrowserContext, Page, Worker } from "@playwright/test";
-import { chromium, expect, firefox, test } from "@playwright/test";
-import { SUMMARY_LENGTH_SPECS } from "@steipete/summarize-core/prompts";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import { createServer as createHttpServer } from "node:http";
@@ -8,13 +5,16 @@ import { createServer as createNetServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SummaryLength } from "../../../src/shared/contracts.js";
+import type { BrowserContext, Page, Worker } from "@playwright/test";
+import { chromium, expect, firefox, test } from "@playwright/test";
+import { SUMMARY_LENGTH_SPECS } from "@steipete/summarize-core/prompts";
 import { runDaemonServer } from "../../../src/daemon/server.js";
 import {
   coerceSummaryWithSlides,
   parseSlideSummariesFromMarkdown,
   splitSlideTitleFromText,
 } from "../../../src/run/flows/url/slides-text.js";
+import type { SummaryLength } from "../../../src/shared/contracts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..", "..", "..");

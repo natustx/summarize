@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ProviderFetchOptions } from "../../types.js";
 import {
   isFfmpegAvailable,
   MAX_OPENAI_UPLOAD_BYTES,
@@ -14,6 +13,7 @@ import {
   resolveTranscriptionConfig,
   type TranscriptionConfig,
 } from "../../transcription-config.js";
+import type { ProviderFetchOptions } from "../../types.js";
 import { resolveTranscriptionStartInfo } from "../transcription-start.js";
 import { MAX_REMOTE_MEDIA_BYTES, TRANSCRIPTION_TIMEOUT_MS } from "./constants.js";
 

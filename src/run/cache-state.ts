@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs";
-import type { SummarizeConfig } from "../config.js";
 import {
   type CacheState,
   createCacheStore,
@@ -7,6 +6,7 @@ import {
   DEFAULT_CACHE_TTL_DAYS,
   resolveCachePath,
 } from "../cache.js";
+import type { SummarizeConfig } from "../config.js";
 
 export async function createCacheStateFromConfig({
   envForRun,

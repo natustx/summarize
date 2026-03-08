@@ -1,9 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type {
   ProcessHandle,
   ProcessObserver,
   ProcessRegistration,
 } from "@steipete/summarize-core/processes";
-import { randomUUID } from "node:crypto";
 
 type ProcessStatus = "running" | "exited" | "error";
 

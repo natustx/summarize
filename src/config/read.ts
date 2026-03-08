@@ -1,6 +1,6 @@
-import JSON5 from "json5";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import JSON5 from "json5";
 import { isRecord } from "./parse-helpers.js";
 
 export function resolveSummarizeConfigPath(env: Record<string, string | undefined>): string | null {

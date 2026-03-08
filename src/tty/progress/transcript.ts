@@ -1,12 +1,12 @@
 import type { LinkPreviewProgressEvent } from "@steipete/summarize-core/content";
-import type { OscProgressController } from "../osc-progress.js";
-import type { ThemeRenderer } from "../theme.js";
 import {
   formatBytes,
   formatBytesPerSecond,
   formatDurationSecondsSmart,
   formatElapsedMs,
 } from "../format.js";
+import type { OscProgressController } from "../osc-progress.js";
+import type { ThemeRenderer } from "../theme.js";
 
 export function createTranscriptProgressRenderer({
   spinner,

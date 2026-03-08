@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import type { CacheStore } from "../src/cache.js";
-import type { AssetSummaryContext } from "../src/run/flows/asset/summary.js";
 import { summarizeMediaFile } from "../src/run/flows/asset/media.js";
+import type { AssetSummaryContext } from "../src/run/flows/asset/summary.js";
 
 const createLinkPreviewClient = vi.hoisted(() => vi.fn());
 

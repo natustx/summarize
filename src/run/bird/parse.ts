@@ -1,5 +1,5 @@
-import type { BirdTweetPayload } from "./types.js";
 import { extractMediaFromBirdRaw, extractMediaFromXurlRaw } from "./media.js";
+import type { BirdTweetPayload } from "./types.js";
 
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === "object" ? (value as Record<string, unknown>) : null;

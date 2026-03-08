@@ -1,6 +1,6 @@
-import { countTokens } from "gpt-tokenizer";
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
+import { countTokens } from "gpt-tokenizer";
 
 const args = process.argv.slice(2);
 let filePath = null;

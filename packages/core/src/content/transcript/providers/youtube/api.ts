@@ -1,6 +1,6 @@
-import type { TranscriptSegment } from "../../../link-preview/types.js";
 import { withBunCompressionHeaders } from "../../../bun.js";
 import { fetchWithTimeout } from "../../../link-preview/fetch-with-timeout.js";
+import type { TranscriptSegment } from "../../../link-preview/types.js";
 import { parseTimestampToMs } from "../../timestamps.js";
 import { extractYoutubeBootstrapConfig, isRecord } from "../../utils.js";
 

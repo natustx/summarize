@@ -1,5 +1,5 @@
-import type { ProviderContext, ProviderFetchOptions, ProviderResult } from "../types.js";
 import { resolveTranscriptionConfig } from "../transcription-config.js";
+import type { ProviderContext, ProviderFetchOptions, ProviderResult } from "../types.js";
 import { resolveTranscriptionAvailability } from "./transcription-start.js";
 import {
   buildUnavailableResult,

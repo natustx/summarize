@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { spawnTracked } from "../../processes.js";
 import {
   DISABLE_LOCAL_WHISPER_CPP_ENV,
@@ -14,6 +13,7 @@ import {
   runFfmpegTranscodeToMp3,
   runFfmpegTranscodeToMp3Lenient,
 } from "./ffmpeg.js";
+import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { wrapError } from "./utils.js";
 
 export async function isWhisperCppReady(): Promise<boolean> {

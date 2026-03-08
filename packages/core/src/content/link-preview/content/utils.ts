@@ -1,5 +1,5 @@
-import type { CacheMode, TranscriptDiagnostics } from "../types.js";
 import { formatTranscriptSegments } from "../../transcript/timestamps.js";
+import type { CacheMode, TranscriptDiagnostics } from "../types.js";
 import { applyContentBudget, normalizeCandidate, normalizeForPrompt } from "./cleaner.js";
 import {
   DEFAULT_CACHE_MODE,

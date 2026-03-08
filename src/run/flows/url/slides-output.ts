@@ -1,9 +1,8 @@
-import { createMarkdownStreamer, render as renderMarkdownAnsi } from "markdansi";
 import { promises as fs } from "node:fs";
+import { createMarkdownStreamer, render as renderMarkdownAnsi } from "markdansi";
 import type { ExtractedLinkContent } from "../../../content/index.js";
 import type { SummaryLength } from "../../../shared/contracts.js";
 import type { SlideExtractionResult, SlideImage, SlideSourceKind } from "../../../slides/index.js";
-import type { SummaryStreamHandler } from "../../summary-engine.js";
 import {
   createThemeRenderer,
   resolveThemeNameFromSources,
@@ -12,6 +11,7 @@ import {
 import { prepareMarkdownForTerminalStreaming } from "../../markdown.js";
 import { createSlidesInlineRenderer } from "../../slides-render.js";
 import { createStreamOutputGate, type StreamOutputMode } from "../../stream-output.js";
+import type { SummaryStreamHandler } from "../../summary-engine.js";
 import { isRichTty, markdownRenderWidth, supportsColor } from "../../terminal.js";
 import { createSlideOutputState } from "./slides-output-state.js";
 import {

@@ -1,7 +1,6 @@
-import { isDirectMediaExtension, isDirectMediaUrl } from "@steipete/summarize-core/content/url";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { SummarizeAssetArgs } from "./summary.js";
+import { isDirectMediaExtension, isDirectMediaUrl } from "@steipete/summarize-core/content/url";
 import {
   classifyUrl,
   type InputTarget,
@@ -17,6 +16,7 @@ import {
   resolveTrueColor,
 } from "../../../tty/theme.js";
 import { assertAssetMediaTypeSupported } from "../../attachments.js";
+import type { SummarizeAssetArgs } from "./summary.js";
 
 /**
  * Check if a media type should route through transcription.

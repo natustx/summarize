@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { transcribeWithAssemblyAi, transcribeFileWithAssemblyAi } from "./assemblyai.js";
 import {
   cloudProviderLabel,
@@ -16,6 +15,7 @@ import { isFfmpegAvailable, transcodeBytesToMp3 } from "./ffmpeg.js";
 import { transcribeFileWithGemini, transcribeWithGemini } from "./gemini.js";
 import { shouldRetryOpenAiViaFfmpeg, transcribeWithOpenAi } from "./openai.js";
 import { buildMissingTranscriptionProviderMessage } from "./provider-setup.js";
+import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { formatBytes, readFirstBytes, wrapError } from "./utils.js";
 
 type Env = Record<string, string | undefined>;

@@ -2,8 +2,6 @@ import type { AssistantMessage, Message, ToolCall, ToolResultMessage } from "@ma
 import { extractYouTubeVideoId, shouldPreferUrlMode } from "@steipete/summarize-core/content/url";
 import { SUMMARY_LENGTH_SPECS } from "@steipete/summarize-core/prompts";
 import MarkdownIt from "markdown-it";
-import type { SummaryLength } from "../../../../../src/shared/contracts.js";
-import type { ChatMessage, PanelPhase, PanelState, RunStart, UiState } from "./types";
 import {
   buildSlideTextFallback,
   coerceSummaryWithSlides,
@@ -14,6 +12,7 @@ import {
   splitSlideTitleFromText,
   splitSummaryFromSlides,
 } from "../../../../../src/run/flows/url/slides-text.js";
+import type { SummaryLength } from "../../../../../src/shared/contracts.js";
 import { parseSseEvent, type SseSlidesData } from "../../../../../src/shared/sse-events.js";
 import { listSkills } from "../../automation/skills-store";
 import { executeToolCall, getAutomationToolNames } from "../../automation/tools";
@@ -44,6 +43,7 @@ import { createSlideImageLoader, normalizeSlideImageUrl } from "./slide-images";
 import { createSlidesHydrator } from "./slides-hydrator";
 import { hasResolvedSlidesPayload } from "./slides-pending";
 import { createStreamController } from "./stream-controller";
+import type { ChatMessage, PanelPhase, PanelState, RunStart, UiState } from "./types";
 
 type PanelToBg =
   | { type: "panel:ready" }

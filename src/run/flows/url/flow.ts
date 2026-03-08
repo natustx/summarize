@@ -1,6 +1,5 @@
 import { NEGATIVE_TTL_MS } from "@steipete/summarize-core/content";
 import * as urlUtils from "@steipete/summarize-core/content/url";
-import type { UrlFlowContext } from "./types.js";
 import { buildExtractCacheKey, buildSlidesCacheKey } from "../../../cache.js";
 import { loadRemoteAsset } from "../../../content/asset.js";
 import {
@@ -43,6 +42,7 @@ import {
 import { createMarkdownConverters } from "./markdown.js";
 import { createSlidesTerminalOutput } from "./slides-output.js";
 import { buildUrlPrompt, outputExtractedUrl, summarizeExtractedUrl } from "./summary.js";
+import type { UrlFlowContext } from "./types.js";
 
 function isMissingSlidesDependencyError(message: string): boolean {
   const lower = message.toLowerCase();

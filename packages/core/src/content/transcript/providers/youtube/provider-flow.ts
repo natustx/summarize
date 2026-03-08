@@ -1,3 +1,4 @@
+import { normalizeTranscriptText } from "../../normalize.js";
 import type { TranscriptionConfig } from "../../transcription-config.js";
 import type {
   ProviderContext,
@@ -5,7 +6,6 @@ import type {
   ProviderResult,
   TranscriptSource,
 } from "../../types.js";
-import { normalizeTranscriptText } from "../../normalize.js";
 import { extractYouTubeVideoId } from "../../utils.js";
 import { extractYoutubeiTranscriptConfig, fetchTranscriptFromTranscriptEndpoint } from "./api.js";
 import { fetchTranscriptWithApify } from "./apify.js";

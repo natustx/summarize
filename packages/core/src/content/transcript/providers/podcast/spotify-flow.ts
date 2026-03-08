@@ -1,6 +1,6 @@
 import type { ProviderResult } from "../../types.js";
-import type { PodcastFlowContext } from "./flow-context.js";
 import { TRANSCRIPTION_TIMEOUT_MS } from "./constants.js";
+import type { PodcastFlowContext } from "./flow-context.js";
 import {
   resolvePodcastEpisodeFromItunesSearch,
   resolvePodcastFeedUrlFromItunesSearch,

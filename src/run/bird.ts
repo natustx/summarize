@@ -1,6 +1,6 @@
-import type { BirdTweetPayload, TweetCliClient } from "./bird/types.js";
 import { execTweetCli } from "./bird/exec.js";
 import { parseBirdTweetPayload, parseXurlTweetPayload } from "./bird/parse.js";
+import type { BirdTweetPayload, TweetCliClient } from "./bird/types.js";
 import { BIRD_TIP, TWITTER_HOSTS } from "./constants.js";
 import { hasBirdCli, hasXurlCli } from "./env.js";
 

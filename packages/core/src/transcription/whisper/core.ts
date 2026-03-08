@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { transcribeWithOnnxCli, transcribeWithOnnxCliFile } from "../onnx-cli.js";
 import { transcribeChunkedFile } from "./chunking.js";
 import { DEFAULT_SEGMENT_SECONDS, MAX_OPENAI_UPLOAD_BYTES } from "./constants.js";
@@ -14,6 +13,7 @@ import {
   transcribeFileWithRemoteFallbacks,
   transcribeOversizedBytesViaTempFile,
 } from "./remote.js";
+import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./types.js";
 import { ensureWhisperFilenameExtension, formatBytes, wrapError } from "./utils.js";
 import { isWhisperCppReady, transcribeWithWhisperCppFile } from "./whisper-cpp.js";
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Settings } from "../apps/chrome-extension/src/lib/settings";
 import { createSlideImageLoader } from "../apps/chrome-extension/src/entrypoints/sidepanel/slide-images";
+import type { Settings } from "../apps/chrome-extension/src/lib/settings";
 
 const originalFetch = globalThis.fetch;
 const originalCreateObjectUrl = URL.createObjectURL;

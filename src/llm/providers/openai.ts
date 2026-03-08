@@ -2,12 +2,12 @@ import type { Context } from "@mariozechner/pi-ai";
 import { completeSimple } from "@mariozechner/pi-ai";
 import { isOpenRouterBaseUrl, normalizeBaseUrl } from "@steipete/summarize-core";
 import type { Attachment } from "../attachments.js";
-import type { LlmTokenUsage } from "../types.js";
-import type { OpenAiClientConfig } from "./types.js";
 import { createUnsupportedFunctionalityError } from "../errors.js";
+import type { LlmTokenUsage } from "../types.js";
 import { normalizeOpenAiUsage, normalizeTokenUsage } from "../usage.js";
 import { resolveOpenAiModel } from "./models.js";
 import { bytesToBase64 } from "./shared.js";
+import type { OpenAiClientConfig } from "./types.js";
 
 export type OpenAiClientConfigInput = {
   apiKeys: {

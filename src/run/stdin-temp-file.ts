@@ -1,7 +1,7 @@
-import { fileTypeFromBuffer } from "file-type";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileTypeFromBuffer } from "file-type";
 
 const DEFAULT_STDIN_MAX_BYTES = 50 * 1024 * 1024;
 

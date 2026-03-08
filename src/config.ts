@@ -1,4 +1,3 @@
-import type { SummarizeConfig } from "./config/types.js";
 import { parseModelConfig, parseModelsConfig } from "./config/model.js";
 import { readParsedConfigFile, resolveSummarizeConfigPath } from "./config/read.js";
 import {
@@ -14,6 +13,7 @@ import {
   parseSlidesConfig,
   parseUiConfig,
 } from "./config/sections.js";
+import type { SummarizeConfig } from "./config/types.js";
 
 export type {
   AnthropicConfig,

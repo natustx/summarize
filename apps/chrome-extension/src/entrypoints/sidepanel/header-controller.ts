@@ -1,5 +1,5 @@
-import type { PanelPhase } from "./types";
 import { splitStatusPercent } from "../../lib/status";
+import type { PanelPhase } from "./types";
 
 type HeaderState = {
   phase: PanelPhase;

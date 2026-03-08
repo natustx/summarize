@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ExtractedLinkContent } from "../src/content/index.js";
-import type { SlideExtractionResult } from "../src/slides/types.js";
 import { buildPromptContentHash } from "../src/cache.js";
+import type { ExtractedLinkContent } from "../src/content/index.js";
 import { buildUrlPrompt } from "../src/run/flows/url/summary.js";
+import type { SlideExtractionResult } from "../src/slides/types.js";
 
 const baseExtracted: ExtractedLinkContent = {
   url: "https://example.com/video",

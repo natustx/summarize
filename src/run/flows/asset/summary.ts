@@ -1,16 +1,6 @@
+import path from "node:path";
 import { countTokens } from "gpt-tokenizer";
 import { render as renderMarkdownAnsi } from "markdansi";
-import path from "node:path";
-import type { CliProvider, SummarizeConfig } from "../../../config.js";
-import type { MediaCache } from "../../../content/index.js";
-import type { LlmCall, RunMetricsReport } from "../../../costs.js";
-import type { OutputLanguage } from "../../../language.js";
-import type { Prompt } from "../../../llm/prompt.js";
-import type { ExecFileFn } from "../../../markitdown.js";
-import type { FixedModelSpec, RequestedModel } from "../../../model-spec.js";
-import type { SummaryLength } from "../../../shared/contracts.js";
-import type { createSummaryEngine } from "../../summary-engine.js";
-import type { ModelAttempt } from "../../types.js";
 import {
   buildLanguageKey,
   buildLengthKey,
@@ -19,14 +9,22 @@ import {
   buildSummaryCacheKey,
   type CacheState,
 } from "../../../cache.js";
+import type { CliProvider, SummarizeConfig } from "../../../config.js";
+import type { MediaCache } from "../../../content/index.js";
+import type { LlmCall, RunMetricsReport } from "../../../costs.js";
+import type { OutputLanguage } from "../../../language.js";
 import { formatOutputLanguageForJson } from "../../../language.js";
 import { parseGatewayStyleModelId } from "../../../llm/model-id.js";
+import type { Prompt } from "../../../llm/prompt.js";
+import type { ExecFileFn } from "../../../markitdown.js";
 import { buildAutoModelAttempts } from "../../../model-auto.js";
+import type { FixedModelSpec, RequestedModel } from "../../../model-spec.js";
 import {
   buildPathSummaryPrompt,
   SUMMARY_LENGTH_TARGET_CHARACTERS,
   SUMMARY_SYSTEM_PROMPT,
 } from "../../../prompts/index.js";
+import type { SummaryLength } from "../../../shared/contracts.js";
 import {
   type AssetAttachment,
   ensureCliAttachmentPath,
@@ -43,7 +41,9 @@ import { writeVerbose } from "../../logging.js";
 import { prepareMarkdownForTerminal } from "../../markdown.js";
 import { runModelAttempts } from "../../model-attempts.js";
 import { buildOpenRouterNoAllowedProvidersMessage } from "../../openrouter.js";
+import type { createSummaryEngine } from "../../summary-engine.js";
 import { isRichTty, markdownRenderWidth, supportsColor } from "../../terminal.js";
+import type { ModelAttempt } from "../../types.js";
 import { prepareAssetPrompt } from "./preprocess.js";
 
 const buildModelMetaFromAttempt = (attempt: ModelAttempt) => {

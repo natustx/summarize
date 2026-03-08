@@ -1,7 +1,7 @@
 import type { TranscriptionConfig } from "../../transcription-config.js";
 import type { ProviderResult } from "../../types.js";
-import type { PodcastFlowContext } from "./flow-context.js";
 import { fetchTranscriptWithYtDlp } from "../youtube/yt-dlp.js";
+import type { PodcastFlowContext } from "./flow-context.js";
 import { buildWhisperResult, joinNotes } from "./results.js";
 import {
   decodeXmlEntities,

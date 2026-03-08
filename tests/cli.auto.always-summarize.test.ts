@@ -1,8 +1,8 @@
-import type { Api } from "@mariozechner/pi-ai";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
+import type { Api } from "@mariozechner/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import { runCli } from "../src/run.js";
 import { makeAssistantMessage } from "./helpers/pi-ai-mock.js";

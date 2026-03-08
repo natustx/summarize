@@ -1,11 +1,10 @@
 import { load } from "cheerio";
-import type { TranscriptSegment } from "../../link-preview/types.js";
-import type { ProviderContext, ProviderFetchOptions, ProviderResult } from "../types.js";
 import { buildMissingTranscriptionProviderNote } from "../../../transcription/whisper/provider-setup.js";
 import {
   isTwitterBroadcastUrl,
   isTwitterStatusUrl,
 } from "../../link-preview/content/twitter-utils.js";
+import type { TranscriptSegment } from "../../link-preview/types.js";
 import { isDirectMediaUrl } from "../../url.js";
 import { normalizeTranscriptText } from "../normalize.js";
 import {
@@ -15,6 +14,7 @@ import {
   vttToSegments,
 } from "../parse.js";
 import { resolveTranscriptionConfig, type TranscriptionConfig } from "../transcription-config.js";
+import type { ProviderContext, ProviderFetchOptions, ProviderResult } from "../types.js";
 import { resolveTranscriptionAvailability } from "./transcription-start.js";
 
 export const canHandle = (): boolean => true;

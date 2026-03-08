@@ -1,11 +1,11 @@
 import type MarkdownIt from "markdown-it";
-import type { ChatMessage } from "./types";
 import {
   buildChatRequestMessages,
   type ChatHistoryLimits,
   computeChatContextUsage,
   hasUserChatMessage,
 } from "./chat-state";
+import type { ChatMessage } from "./types";
 
 type RenderOptions = { prepend?: boolean; scroll?: boolean };
 

@@ -1,13 +1,13 @@
-import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { randomUUID } from "node:crypto";
 import { createWriteStream, promises as fs } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./whisper/types.js";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { spawnTracked } from "../processes.js";
 import { isFfmpegAvailable, runFfmpegTranscodeToWav } from "./whisper/ffmpeg.js";
+import type { WhisperProgressEvent, WhisperTranscriptionResult } from "./whisper/types.js";
 import { wrapError } from "./whisper/utils.js";
 
 export type OnnxModelId = "parakeet" | "canary";

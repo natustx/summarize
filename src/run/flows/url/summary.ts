@@ -1,12 +1,6 @@
 import { isTwitterStatusUrl, isYouTubeUrl } from "@steipete/summarize-core/content/url";
 import { countTokens } from "gpt-tokenizer";
 import { render as renderMarkdownAnsi } from "markdansi";
-import type { ExtractedLinkContent } from "../../../content/index.js";
-import type { Prompt } from "../../../llm/prompt.js";
-import type { ModelAttempt } from "../../types.js";
-import type { UrlExtractionUi } from "./extract.js";
-import type { SlidesTerminalOutput } from "./slides-output.js";
-import type { UrlFlowContext } from "./types.js";
 import {
   buildLanguageKey,
   buildLengthKey,
@@ -14,8 +8,10 @@ import {
   buildPromptHash,
   buildSummaryCacheKey,
 } from "../../../cache.js";
+import type { ExtractedLinkContent } from "../../../content/index.js";
 import { formatOutputLanguageForJson } from "../../../language.js";
 import { parseGatewayStyleModelId } from "../../../llm/model-id.js";
+import type { Prompt } from "../../../llm/prompt.js";
 import { buildAutoModelAttempts } from "../../../model-auto.js";
 import {
   buildLinkSummaryPrompt,
@@ -38,11 +34,15 @@ import { prepareMarkdownForTerminal } from "../../markdown.js";
 import { runModelAttempts } from "../../model-attempts.js";
 import { buildOpenRouterNoAllowedProvidersMessage } from "../../openrouter.js";
 import { isRichTty, markdownRenderWidth, supportsColor } from "../../terminal.js";
+import type { ModelAttempt } from "../../types.js";
+import type { UrlExtractionUi } from "./extract.js";
+import type { SlidesTerminalOutput } from "./slides-output.js";
 import {
   coerceSummaryWithSlides,
   interleaveSlidesIntoTranscript,
   normalizeSummarySlideHeadings,
 } from "./slides-text.js";
+import type { UrlFlowContext } from "./types.js";
 
 type SlidesResult = Awaited<
   ReturnType<typeof import("../../../slides/index.js").extractSlidesForSource>

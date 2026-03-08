@@ -7,8 +7,6 @@ import type {
   VideoMode,
   YoutubeMode,
 } from "../flags.js";
-import type { OutputLanguage } from "../language.js";
-import type { SummaryLengthTarget } from "../prompts/index.js";
 import {
   parseDurationMs,
   parseFirecrawlMode,
@@ -20,7 +18,9 @@ import {
   parseVideoMode,
   parseYoutubeMode,
 } from "../flags.js";
+import type { OutputLanguage } from "../language.js";
 import { resolveOutputLanguage } from "../language.js";
+import type { SummaryLengthTarget } from "../prompts/index.js";
 
 export type ResolvedRunSettings = {
   lengthArg: LengthArg;

@@ -1,3 +1,12 @@
+import { isCliThemeName, listCliThemes } from "../tty/theme.js";
+import {
+  isRecord,
+  parseCliProvider,
+  parseLoggingFormat,
+  parseLoggingLevel,
+  parseOptionalBaseUrl,
+  parseStringArray,
+} from "./parse-helpers.js";
 import type {
   ApiKeysConfig,
   CliAutoFallbackConfig,
@@ -11,15 +20,6 @@ import type {
   OpenAiConfig,
   VideoMode,
 } from "./types.js";
-import { isCliThemeName, listCliThemes } from "../tty/theme.js";
-import {
-  isRecord,
-  parseCliProvider,
-  parseLoggingFormat,
-  parseLoggingLevel,
-  parseOptionalBaseUrl,
-  parseStringArray,
-} from "./parse-helpers.js";
 
 export function parseProviderBaseUrlConfig(
   raw: unknown,

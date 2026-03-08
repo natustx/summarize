@@ -2,8 +2,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MediaCache } from "../../../cache/types.js";
-import type { LinkPreviewProgressEvent } from "../../../link-preview/deps.js";
 import { spawnTracked } from "../../../../processes.js";
 import {
   probeMediaDurationSecondsWithFfprobe,
@@ -11,6 +9,8 @@ import {
   transcribeMediaFileWithWhisper,
 } from "../../../../transcription/whisper.js";
 import { buildMissingTranscriptionProviderMessage } from "../../../../transcription/whisper/provider-setup.js";
+import type { MediaCache } from "../../../cache/types.js";
+import type { LinkPreviewProgressEvent } from "../../../link-preview/deps.js";
 import { ProgressKind } from "../../../link-preview/deps.js";
 import {
   resolveTranscriptionConfig,

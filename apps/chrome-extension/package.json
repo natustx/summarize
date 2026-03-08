@@ -18,16 +18,16 @@
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
-    "@zag-js/checkbox": "^1.33.1",
-    "@zag-js/preact": "^1.33.1",
-    "@zag-js/select": "^1.33.1",
+    "@zag-js/checkbox": "^1.35.3",
+    "@zag-js/preact": "^1.35.3",
+    "@zag-js/select": "^1.35.3",
     "markdown-it": "^14.1.1",
-    "preact": "11.0.0-experimental.1"
+    "preact": "10.28.4"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
-    "@types/chrome": "^0.1.36",
+    "@types/chrome": "^0.1.37",
     "typescript": "^5.9.3",
-    "wxt": "0.20.17"
+    "wxt": "0.20.18"
   }
 }

@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import type { CliProvider } from "../src/config.js";
-import type { ExecFileFn } from "../src/markitdown.js";
 import { isCliDisabled, resolveCliBinary, runCliModel } from "../src/llm/cli.js";
+import type { ExecFileFn } from "../src/markitdown.js";
 
 const makeStub = (handler: (args: string[]) => { stdout?: string; stderr?: string }) => {
   const execFileStub: ExecFileFn = ((_cmd, args, _options, cb) => {

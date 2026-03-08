@@ -1,10 +1,10 @@
 import { render as renderMarkdownAnsi } from "markdansi";
 import type { RunMetricsReport } from "../../../costs.js";
 import type { AssetAttachment } from "../../attachments.js";
-import type { AssetExtractResult } from "./extract.js";
 import { buildExtractFinishLabel, writeFinishLine } from "../../finish-line.js";
 import { prepareMarkdownForTerminal } from "../../markdown.js";
 import { isRichTty, markdownRenderWidth, supportsColor } from "../../terminal.js";
+import type { AssetExtractResult } from "./extract.js";
 
 export async function outputExtractedAsset({
   io,

@@ -1,15 +1,15 @@
-import type {
-  FirecrawlScrapeResult,
-  LinkPreviewProgressEvent,
-  ScrapeWithFirecrawl,
-} from "../deps.js";
-import type { CacheMode, FirecrawlDiagnostics } from "../types.js";
 import {
   isBunCompressedResponseError,
   withBunCompressionHeaders,
   withBunIdentityEncoding,
 } from "../../bun.js";
 import { isYouTubeUrl } from "../../url.js";
+import type {
+  FirecrawlScrapeResult,
+  LinkPreviewProgressEvent,
+  ScrapeWithFirecrawl,
+} from "../deps.js";
+import type { CacheMode, FirecrawlDiagnostics } from "../types.js";
 import { appendNote } from "./utils.js";
 
 const REQUEST_HEADERS: Record<string, string> = {

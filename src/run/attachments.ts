@@ -1,7 +1,7 @@
-import mime from "mime";
 import fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import mime from "mime";
 import type { loadLocalAsset } from "../content/asset.js";
 import { formatBytes } from "../tty/format.js";
 

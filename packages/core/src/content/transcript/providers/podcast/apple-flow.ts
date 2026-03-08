@@ -1,11 +1,11 @@
 import type { ProviderResult } from "../../types.js";
-import type { PodcastFlowContext } from "./flow-context.js";
 import {
   extractAppleEpisodeTitleFromHtml,
   extractApplePodcastIds,
   extractEmbeddedJsonUrl,
 } from "./apple.js";
 import { TRANSCRIPTION_TIMEOUT_MS } from "./constants.js";
+import type { PodcastFlowContext } from "./flow-context.js";
 import { resolveApplePodcastEpisodeFromItunesLookup } from "./itunes.js";
 import { buildWhisperResult, joinNotes } from "./results.js";
 import {
