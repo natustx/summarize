@@ -1,3 +1,4 @@
+import { parseLengthArg } from "../flags.js";
 import { isCliThemeName, listCliThemes } from "../tty/theme.js";
 import {
   isRecord,
@@ -303,6 +304,12 @@ export function parseCliConfig(root: Record<string, unknown>, path: string): Cli
   const codex = value.codex ? parseCliProviderConfig(value.codex, path, "codex") : undefined;
   const gemini = value.gemini ? parseCliProviderConfig(value.gemini, path, "gemini") : undefined;
   const agent = value.agent ? parseCliProviderConfig(value.agent, path, "agent") : undefined;
+  const openclaw = value.openclaw
+    ? parseCliProviderConfig(value.openclaw, path, "openclaw")
+    : undefined;
+  const opencode = value.opencode
+    ? parseCliProviderConfig(value.opencode, path, "opencode")
+    : undefined;
   if (typeof value.autoFallback !== "undefined" && typeof value.magicAuto !== "undefined") {
     throw new Error(
       `Invalid config file ${path}: use only one of "cli.autoFallback" or legacy "cli.magicAuto".`,
@@ -334,6 +341,8 @@ export function parseCliConfig(root: Record<string, unknown>, path: string): Cli
     codex ||
     gemini ||
     agent ||
+    openclaw ||
+    opencode ||
     autoFallback ||
     promptOverride ||
     typeof allowTools === "boolean" ||
@@ -345,6 +354,8 @@ export function parseCliConfig(root: Record<string, unknown>, path: string): Cli
         ...(codex ? { codex } : {}),
         ...(gemini ? { gemini } : {}),
         ...(agent ? { agent } : {}),
+        ...(openclaw ? { openclaw } : {}),
+        ...(opencode ? { opencode } : {}),
         ...(autoFallback ? { autoFallback } : {}),
         ...(promptOverride ? { promptOverride } : {}),
         ...(typeof allowTools === "boolean" ? { allowTools } : {}),
@@ -364,7 +375,30 @@ export function parseOutputConfig(root: Record<string, unknown>, path: string) {
     typeof value.language === "string" && value.language.trim().length > 0
       ? value.language.trim()
       : undefined;
-  return typeof language === "string" ? { language } : undefined;
+  const length = (() => {
+    if (typeof value.length === "undefined") return undefined;
+    if (typeof value.length !== "string") {
+      throw new Error(`Invalid config file ${path}: "output.length" must be a string.`);
+    }
+    const trimmed = value.length.trim();
+    if (!trimmed) {
+      throw new Error(`Invalid config file ${path}: "output.length" must not be empty.`);
+    }
+    try {
+      parseLengthArg(trimmed);
+    } catch (error) {
+      throw new Error(
+        `Invalid config file ${path}: "output.length" is invalid: ${(error as Error).message}`,
+      );
+    }
+    return trimmed;
+  })();
+  return typeof language === "string" || typeof length === "string"
+    ? {
+        ...(typeof language === "string" ? { language } : {}),
+        ...(typeof length === "string" ? { length } : {}),
+      }
+    : undefined;
 }
 
 export function parseUiConfig(root: Record<string, unknown>, path: string) {

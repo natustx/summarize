@@ -4,7 +4,6 @@ import { buildExtractCacheKey } from "../../../cache.js";
 import {
   createLinkPreviewClient,
   type ExtractedLinkContent,
-  type FetchLinkContentOptions,
   type LinkPreviewProgressEvent,
 } from "../../../content/index.js";
 import { createFirecrawlScraper } from "../../../firecrawl.js";
@@ -14,6 +13,7 @@ import { resolveTwitterCookies } from "../../cookies/twitter.js";
 import { hasBirdCli, hasXurlCli } from "../../env.js";
 import { writeVerbose } from "../../logging.js";
 import { fetchLinkContentWithBirdTip } from "./extract.js";
+import { resolveUrlFetchOptions } from "./fetch-options.js";
 import type { UrlFlowContext } from "./types.js";
 
 type LinkPreviewClientOptions = NonNullable<Parameters<typeof createLinkPreviewClient>[0]>;
@@ -89,28 +89,18 @@ export function createUrlExtractionSession({
     onProgress,
   });
 
-  const buildFetchOptions = (): FetchLinkContentOptions => ({
-    timeoutMs: flags.timeoutMs,
-    maxCharacters:
-      typeof flags.maxExtractCharacters === "number" && flags.maxExtractCharacters > 0
-        ? flags.maxExtractCharacters
-        : undefined,
-    youtubeTranscript: flags.youtubeMode,
-    mediaTranscript: flags.videoMode === "transcript" ? "prefer" : "auto",
-    transcriptTimestamps: flags.transcriptTimestamps,
-    firecrawl: flags.firecrawlMode,
-    format: markdown.markdownRequested ? "markdown" : "text",
-    markdownMode: markdown.markdownRequested ? markdown.effectiveMarkdownMode : undefined,
-    cacheMode: cacheState.mode,
-  });
-
   const fetchWithCache = async (
     targetUrl: string,
     { bypassExtractCache = false }: { bypassExtractCache?: boolean } = {},
   ): Promise<ExtractedLinkContent> => {
-    const options = buildFetchOptions();
+    const { localFile, options } = resolveUrlFetchOptions({
+      targetUrl,
+      flags,
+      markdown,
+      cacheMode: cacheState.mode,
+    });
     const cacheKey =
-      cacheStore && cacheState.mode === "default"
+      !localFile && cacheStore && cacheState.mode === "default"
         ? buildExtractCacheKey({
             url: targetUrl,
             options: {

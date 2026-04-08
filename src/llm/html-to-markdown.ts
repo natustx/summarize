@@ -1,6 +1,7 @@
 import type { ConvertHtmlToMarkdown } from "@steipete/summarize-core/content";
 import type { LlmTokenUsage } from "./generate-text.js";
 import { generateTextWithModelId } from "./generate-text.js";
+import type { LlmProvider } from "./model-id.js";
 
 const MAX_HTML_INPUT_CHARACTERS = 200_000;
 
@@ -75,11 +76,7 @@ export function createHtmlToMarkdownConverter({
     delayMs: number;
     error: unknown;
   }) => void;
-  onUsage?: (usage: {
-    model: string;
-    provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
-    usage: LlmTokenUsage | null;
-  }) => void;
+  onUsage?: (usage: { model: string; provider: LlmProvider; usage: LlmTokenUsage | null }) => void;
 }): ConvertHtmlToMarkdown {
   return async ({ url, html, title, siteName, timeoutMs }) => {
     const trimmedHtml =

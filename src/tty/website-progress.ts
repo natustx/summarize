@@ -106,6 +106,20 @@ export function createWebsiteProgress({
         const label = event.hint?.trim();
         const text = label && label.length > 0 ? label : "Transcribing";
         spinner.setText(theme ? `${styleLabel(text)}${styleDim("…")}` : `${text}…`);
+        return;
+      }
+
+      if (event.kind === "transcript-done") {
+        stopAll();
+        if (event.ok) {
+          spinner.setText(theme ? `${styleLabel("Transcribed")}${styleDim("…")}` : "Transcribed…");
+          return;
+        }
+        spinner.setText(
+          theme
+            ? `${styleLabel("Transcript unavailable")}${styleDim("…")}`
+            : "Transcript unavailable…",
+        );
       }
     },
   };

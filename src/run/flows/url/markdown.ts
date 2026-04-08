@@ -1,3 +1,4 @@
+import { resolveGitHubModelsApiKey } from "../../../llm/github-models.js";
 import { createHtmlToMarkdownConverter } from "../../../llm/html-to-markdown.js";
 import { parseGatewayStyleModelId } from "../../../llm/model-id.js";
 import {
@@ -23,7 +24,15 @@ export type MarkdownConverters = {
   markdownRequested: boolean;
   transcriptMarkdownRequested: boolean;
   effectiveMarkdownMode: "off" | "auto" | "llm" | "readability";
-  markdownProvider: "none" | "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  markdownProvider:
+    | "none"
+    | "xai"
+    | "openai"
+    | "google"
+    | "anthropic"
+    | "zai"
+    | "nvidia"
+    | "github-copilot";
   markdownModel: MarkdownModel | null;
   convertHtmlToMarkdown:
     | ((args: {
@@ -84,6 +93,16 @@ export function createMarkdownConverters(
           requiredEnv: ctx.model.fixedModelSpec.requiredEnv,
           openaiApiKeyOverride: ctx.model.apiStatus.nvidiaApiKey,
           openaiBaseUrlOverride: ctx.model.apiStatus.nvidiaBaseUrl,
+          forceChatCompletions: true,
+        };
+      }
+      if (ctx.model.fixedModelSpec?.requiredEnv === "GITHUB_TOKEN") {
+        return {
+          llmModelId: ctx.model.requestedModel.llmModelId,
+          forceOpenRouter: false,
+          requiredEnv: ctx.model.fixedModelSpec.requiredEnv,
+          openaiApiKeyOverride: resolveGitHubModelsApiKey(ctx.io.envForRun),
+          openaiBaseUrlOverride: ctx.model.fixedModelSpec.openaiBaseUrlOverride ?? null,
           forceChatCompletions: true,
         };
       }
@@ -148,6 +167,8 @@ export function createMarkdownConverters(
     if (markdownModel.requiredEnv === "Z_AI_API_KEY") return Boolean(ctx.model.apiStatus.zaiApiKey);
     if (markdownModel.requiredEnv === "NVIDIA_API_KEY")
       return Boolean(ctx.model.apiStatus.nvidiaApiKey);
+    if (markdownModel.requiredEnv === "GITHUB_TOKEN")
+      return Boolean(resolveGitHubModelsApiKey(ctx.io.envForRun));
     if (markdownModel.openaiApiKeyOverride) return true;
     const parsed = parseGatewayStyleModelId(markdownModel.llmModelId);
     return parsed.provider === "xai"
@@ -172,6 +193,7 @@ export function createMarkdownConverters(
       if (markdownModel?.forceOpenRouter) return "OPENROUTER_API_KEY";
       if (markdownModel?.requiredEnv === "Z_AI_API_KEY") return "Z_AI_API_KEY";
       if (markdownModel?.requiredEnv === "NVIDIA_API_KEY") return "NVIDIA_API_KEY";
+      if (markdownModel?.requiredEnv === "GITHUB_TOKEN") return "GITHUB_TOKEN (or GH_TOKEN)";
       if (markdownModel) {
         const parsed = parseGatewayStyleModelId(markdownModel.llmModelId);
         return parsed.provider === "xai"
@@ -184,7 +206,9 @@ export function createMarkdownConverters(
                 ? "Z_AI_API_KEY"
                 : parsed.provider === "nvidia"
                   ? "NVIDIA_API_KEY"
-                  : "OPENAI_API_KEY";
+                  : parsed.provider === "github-copilot"
+                    ? "GITHUB_TOKEN (or GH_TOKEN)"
+                    : "OPENAI_API_KEY";
       }
       return "GEMINI_API_KEY (or GOOGLE_GENERATIVE_AI_API_KEY / GOOGLE_API_KEY)";
     })();

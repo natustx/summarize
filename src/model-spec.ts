@@ -1,16 +1,19 @@
 import type { CliProvider } from "./config.js";
 import { normalizeGatewayStyleModelId, parseGatewayStyleModelId } from "./llm/model-id.js";
+import type { LlmProvider } from "./llm/model-id.js";
 import {
   type RequiredModelEnv,
   requiredEnvForCliProvider,
   resolveRequiredEnvForModelId,
 } from "./llm/provider-capabilities.js";
 
-const DEFAULT_CLI_MODELS: Record<CliProvider, string> = {
+const DEFAULT_CLI_MODELS: Record<CliProvider, string | null> = {
   claude: "sonnet",
   codex: "gpt-5.2",
   gemini: "gemini-3-flash",
   agent: "gpt-5.2",
+  openclaw: "main",
+  opencode: null,
 };
 
 export type FixedModelSpec =
@@ -18,7 +21,7 @@ export type FixedModelSpec =
       transport: "native";
       userModelId: string;
       llmModelId: string;
-      provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+      provider: LlmProvider;
       openrouterProviders: string[] | null;
       forceOpenRouter: false;
       requiredEnv:
@@ -27,7 +30,8 @@ export type FixedModelSpec =
         | "GEMINI_API_KEY"
         | "ANTHROPIC_API_KEY"
         | "Z_AI_API_KEY"
-        | "NVIDIA_API_KEY";
+        | "NVIDIA_API_KEY"
+        | "GITHUB_TOKEN";
       openaiBaseUrlOverride?: string | null;
       forceChatCompletions?: boolean;
     }
@@ -46,7 +50,13 @@ export type FixedModelSpec =
       llmModelId: null;
       openrouterProviders: null;
       forceOpenRouter: false;
-      requiredEnv: "CLI_CLAUDE" | "CLI_CODEX" | "CLI_GEMINI" | "CLI_AGENT";
+      requiredEnv:
+        | "CLI_CLAUDE"
+        | "CLI_CODEX"
+        | "CLI_GEMINI"
+        | "CLI_AGENT"
+        | "CLI_OPENCLAW"
+        | "CLI_OPENCODE";
       cliProvider: CliProvider;
       cliModel: string | null;
     };
@@ -121,6 +131,26 @@ export function parseRequestedModelId(raw: string): RequestedModel {
     };
   }
 
+  if (lower.startsWith("github-copilot/")) {
+    const model = trimmed.slice("github-copilot/".length).trim();
+    if (model.length === 0) {
+      throw new Error("Invalid model id: github-copilot/… is missing the model id");
+    }
+    const userModelId = normalizeGatewayStyleModelId(`github-copilot/${model}`);
+    return {
+      kind: "fixed",
+      transport: "native",
+      userModelId,
+      llmModelId: userModelId,
+      provider: "github-copilot",
+      openrouterProviders: null,
+      forceOpenRouter: false,
+      requiredEnv: "GITHUB_TOKEN",
+      openaiBaseUrlOverride: "https://models.github.ai/inference",
+      forceChatCompletions: true,
+    };
+  }
+
   if (lower.startsWith("cli/")) {
     const parts = trimmed
       .split("/")
@@ -131,7 +161,9 @@ export function parseRequestedModelId(raw: string): RequestedModel {
       providerRaw !== "claude" &&
       providerRaw !== "codex" &&
       providerRaw !== "gemini" &&
-      providerRaw !== "agent"
+      providerRaw !== "agent" &&
+      providerRaw !== "openclaw" &&
+      providerRaw !== "opencode"
     ) {
       throw new Error(`Invalid CLI model id "${trimmed}". Expected cli/<provider>/<model>.`);
     }
@@ -140,9 +172,9 @@ export function parseRequestedModelId(raw: string): RequestedModel {
     const cliModel = requestedModel.length > 0 ? requestedModel : DEFAULT_CLI_MODELS[cliProvider];
     const requiredEnv = requiredEnvForCliProvider(cliProvider) as Extract<
       RequiredModelEnv,
-      "CLI_CLAUDE" | "CLI_CODEX" | "CLI_GEMINI" | "CLI_AGENT"
+      "CLI_CLAUDE" | "CLI_CODEX" | "CLI_GEMINI" | "CLI_AGENT" | "CLI_OPENCLAW" | "CLI_OPENCODE"
     >;
-    const userModelId = `cli/${cliProvider}/${cliModel}`;
+    const userModelId = cliModel ? `cli/${cliProvider}/${cliModel}` : `cli/${cliProvider}`;
     return {
       kind: "fixed",
       transport: "cli",
@@ -153,6 +185,21 @@ export function parseRequestedModelId(raw: string): RequestedModel {
       requiredEnv,
       cliProvider,
       cliModel,
+    };
+  }
+
+  if (lower.startsWith("openclaw/")) {
+    const model = trimmed.slice("openclaw/".length).trim() || "main";
+    return {
+      kind: "fixed",
+      transport: "cli",
+      userModelId: `openclaw/${model}`,
+      llmModelId: null,
+      openrouterProviders: null,
+      forceOpenRouter: false,
+      requiredEnv: "CLI_OPENCLAW",
+      cliProvider: "openclaw",
+      cliModel: model,
     };
   }
 
@@ -172,6 +219,7 @@ export function parseRequestedModelId(raw: string): RequestedModel {
     | "ANTHROPIC_API_KEY"
     | "Z_AI_API_KEY"
     | "NVIDIA_API_KEY"
+    | "GITHUB_TOKEN"
   >;
   return {
     kind: "fixed",

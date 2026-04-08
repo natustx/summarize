@@ -1,3 +1,5 @@
+import type { LlmProvider } from "../llm/model-id.js";
+
 export { mergeStreamingChunk } from "../shared/streaming-merge.js";
 
 export function isGoogleStreamingUnsupportedError(error: unknown): boolean {
@@ -38,7 +40,7 @@ export function canStream({
   prompt,
   transport,
 }: {
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   prompt: { attachments?: Array<{ kind: "text" | "image" | "document" }> };
   transport: "cli" | "native" | "openrouter";
 }): boolean {
@@ -52,6 +54,7 @@ export function canStream({
     "anthropic",
     "zai",
     "nvidia",
+    "github-copilot",
   ]);
   return streamableProviders.has(provider);
 }

@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { CliProvider } from "../../../config.js";
+import { resolveGitHubModelsApiKey } from "../../../llm/github-models.js";
 import { buildAutoModelAttempts } from "../../../model-auto.js";
 import { buildPathSummaryPrompt } from "../../../prompts/index.js";
 import { ensureCliAttachmentPath } from "../../attachments.js";
@@ -76,7 +77,13 @@ export async function buildAssetModelAttempts({
             openaiBaseUrlOverride: ctx.apiStatus.nvidiaBaseUrl,
             forceChatCompletions: true,
           }
-        : {};
+        : ctx.fixedModelSpec.requiredEnv === "GITHUB_TOKEN"
+          ? {
+              openaiApiKeyOverride: resolveGitHubModelsApiKey(ctx.env),
+              openaiBaseUrlOverride: ctx.fixedModelSpec.openaiBaseUrlOverride ?? null,
+              forceChatCompletions: true,
+            }
+          : {};
   return [
     {
       transport: ctx.fixedModelSpec.transport === "openrouter" ? "openrouter" : "native",
@@ -119,6 +126,7 @@ export async function buildAssetCliContext({
   const extraArgsByProvider: Partial<Record<CliProvider, string[]>> = {
     gemini: ["--include-directories", dir],
     codex: args.attachment.kind === "image" ? ["-i", filePath] : undefined,
+    opencode: ["--file", filePath],
   };
 
   return {

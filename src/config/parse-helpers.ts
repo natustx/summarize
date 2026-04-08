@@ -10,7 +10,14 @@ export function parseOptionalBaseUrl(raw: unknown): string | undefined {
 
 export function parseCliProvider(value: unknown, path: string): CliProvider {
   const trimmed = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (trimmed === "claude" || trimmed === "codex" || trimmed === "gemini" || trimmed === "agent") {
+  if (
+    trimmed === "claude" ||
+    trimmed === "codex" ||
+    trimmed === "gemini" ||
+    trimmed === "agent" ||
+    trimmed === "openclaw" ||
+    trimmed === "opencode"
+  ) {
     return trimmed as CliProvider;
   }
   throw new Error(`Invalid config file ${path}: unknown CLI provider "${String(value)}".`);

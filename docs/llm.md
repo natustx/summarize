@@ -27,6 +27,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `NVIDIA_API_KEY` (required for `nvidia/...` models; alias: `NGC_API_KEY`)
 - `NVIDIA_BASE_URL` (optional; override NVIDIA OpenAI-compatible API endpoint; default: `https://integrate.api.nvidia.com/v1`)
 - `OPENROUTER_API_KEY` (optional; required for `openrouter/...` models; also used when `OPENAI_BASE_URL` points to OpenRouter)
+- `GITHUB_TOKEN` / `GH_TOKEN` (required for `github-copilot/...` models via GitHub Models)
 - `Z_AI_API_KEY` (required for `zai/...` models; supports `ZAI_API_KEY` alias)
 - `Z_AI_BASE_URL` (optional; override default Z.AI base URL)
 - `GEMINI_API_KEY` (required for `google/...` models; also accepts `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY`)
@@ -34,7 +35,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `ANTHROPIC_API_KEY` (required for `anthropic/...` models)
 - `ANTHROPIC_BASE_URL` (optional; override Anthropic API endpoint)
 - `SUMMARIZE_MODEL` (optional; overrides default model selection)
-- `CLAUDE_PATH` / `CODEX_PATH` / `GEMINI_PATH` / `AGENT_PATH` (optional; override CLI binary paths)
+- `CLAUDE_PATH` / `CODEX_PATH` / `GEMINI_PATH` / `AGENT_PATH` / `OPENCLAW_PATH` / `OPENCODE_PATH` (optional; override CLI binary paths)
 
 ## Flags
 
@@ -44,8 +45,15 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
     - `cli/claude/sonnet`
     - `cli/gemini/gemini-3-flash`
     - `cli/agent/gpt-5.2`
+    - `cli/openclaw/main`
+    - `cli/opencode/openai/gpt-5.4`
+    - `openai/gpt-5.4`
+    - `openai/gpt-5.4-mini`
+    - `openai/gpt-5.4-nano`
     - `google/gemini-3-flash`
     - `openai/gpt-5-mini`
+    - `openai/gpt-5-nano`
+    - `github-copilot/gpt-5.4`
     - `nvidia/z-ai/glm5`
     - `zai/glm-4.7`
     - `xai/grok-4-fast-non-reasoning`
@@ -53,7 +61,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
     - `anthropic/claude-sonnet-4-5`
     - `openrouter/meta-llama/llama-3.3-70b-instruct:free` (force OpenRouter)
 - `--cli [provider]`
-  - Examples: `--cli claude`, `--cli Gemini`, `--cli codex`, `--cli agent` (equivalent to `--model cli/<provider>`); `--cli` alone uses auto selection with CLI enabled.
+  - Examples: `--cli claude`, `--cli Gemini`, `--cli codex`, `--cli agent`, `--cli openclaw`, `--cli opencode` (equivalent to `--model cli/<provider>`); `--cli` alone uses auto selection with CLI enabled.
 - `--model auto`
   - See `docs/model-auto.md`
 - `--model <preset>`
@@ -73,7 +81,8 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `--length short|medium|long|xl|xxl|<chars>`
   - This is _soft guidance_ to the model (no hard truncation).
   - Minimum numeric value: 50 chars.
-  - Default: `long`.
+  - Built-in default: `xl`.
+  - Config default: `output.length` in `~/.summarize/config.json`.
   - Output format is Markdown; use short paragraphs and only add bullets when they improve scanability.
 - `--force-summary`
   - Always run the LLM even when extracted content is shorter than the requested length.
@@ -97,6 +106,23 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 ## Z.AI
 
 Use `--model zai/<model>` (e.g. `zai/glm-4.7`). Defaults to Z.AI’s base URL and uses chat completions.
+
+## GitHub Copilot / GitHub Models
+
+Use `--model github-copilot/<model>` for explicit GitHub-hosted model calls.
+
+- Examples:
+  - `github-copilot/gpt-5.4`
+  - `github-copilot/gpt-5.4-mini`
+  - `github-copilot/gpt-5.4-nano`
+  - `github-copilot/gpt-5-mini`
+  - `github-copilot/gpt-5-nano`
+  - `github-copilot/anthropic/claude-haiku-4.5`
+- Auth: `GITHUB_TOKEN` or `GH_TOKEN`
+- Transport: GitHub Models chat completions (`https://models.github.ai/inference`)
+- Notes:
+  - bare shorthand like `github-copilot/gpt-5.4` or `github-copilot/claude-opus-4.6` auto-expands to the provider-qualified backend id
+  - document attachments stay unsupported in this mode
 
 ## Input limits
 

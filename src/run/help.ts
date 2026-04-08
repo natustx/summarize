@@ -79,7 +79,7 @@ export function buildProgram() {
     )
     .option(
       "--length <length>",
-      "Summary length: short|medium|long|xl|xxl (or s/m/l) or a character limit like 20000, 20k",
+      "Summary length: short|medium|long|xl|xxl (or s/m/l) or a character limit like 20000, 20k (default: xl; configurable via ~/.summarize/config.json output.length)",
       "xl",
     )
     .option(
@@ -126,7 +126,7 @@ export function buildProgram() {
     .addOption(
       new Option(
         "--cli [provider]",
-        "Use a CLI provider: claude, gemini, codex, agent (equivalent to --model cli/<provider>). If omitted, use auto selection with CLI enabled.",
+        "Use a CLI provider: claude, gemini, codex, agent, openclaw, opencode (equivalent to --model cli/<provider>). If omitted, use auto selection with CLI enabled.",
       ),
     )
     .option("--extract", "Print extracted content and exit (no LLM summary)", false)
@@ -247,6 +247,7 @@ ${heading("Examples")}
   ${cmd('summarize slides "https://www.youtube.com/watch?v=..." --render auto')} ${dim("# slides-only mode with inline thumbnails")}
   ${cmd("summarize transcriber setup")} ${dim("# configure local ONNX transcription (parakeet/canary)")}
   ${cmd('summarize "https://example.com" --length 20k --max-output-tokens 2k --timeout 2m --model openai/gpt-5-mini')}
+  ${cmd('summarize "https://example.com" --model github-copilot/gpt-5.4')} ${dim("# GitHub Models via GITHUB_TOKEN")}
   ${cmd('summarize "https://example.com" --model mymodel')} ${dim("# config preset")}
   ${cmd('summarize "https://example.com" --json --verbose')}
   ${cmd("pbpaste | summarize -")} ${dim("# summarize clipboard content")}
@@ -263,6 +264,7 @@ ${heading("Env Vars")}
   NGC_API_KEY           optional (alias for NVIDIA_API_KEY)
   NVIDIA_BASE_URL       optional (override NVIDIA OpenAI-compatible API endpoint)
   OPENROUTER_API_KEY    optional (routes openai/... models through OpenRouter)
+  GITHUB_TOKEN          optional (required for github-copilot/... models; GH_TOKEN also works)
   Z_AI_API_KEY          optional (required for zai/... models)
   Z_AI_BASE_URL         optional (override default Z.AI base URL)
   GEMINI_API_KEY        optional (required for google/... models)
@@ -273,6 +275,8 @@ ${heading("Env Vars")}
   CODEX_PATH            optional (path to Codex CLI binary)
   GEMINI_PATH           optional (path to Gemini CLI binary)
   AGENT_PATH            optional (path to Cursor Agent CLI binary)
+  OPENCLAW_PATH         optional (path to OpenClaw CLI binary)
+  OPENCODE_PATH         optional (path to OpenCode CLI binary)
   SUMMARIZE_MODEL       optional (overrides default model selection)
   SUMMARIZE_THEME       optional (${CLI_THEME_NAMES.join(", ")})
   SUMMARIZE_TRUECOLOR   optional (force 24-bit color)

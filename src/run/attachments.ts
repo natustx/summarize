@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import mime from "mime";
 import type { loadLocalAsset } from "../content/asset.js";
+import type { LlmProvider } from "../llm/model-id.js";
 import { formatBytes } from "../tty/format.js";
 
 export type AssetAttachment = Awaited<ReturnType<typeof loadLocalAsset>>["attachment"];
@@ -135,7 +136,7 @@ export function supportsNativeFileAttachment({
   provider,
   attachment,
 }: {
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   attachment: { kind: "image" | "file"; mediaType: string };
 }): boolean {
   if (attachment.kind !== "file") return false;
@@ -148,7 +149,7 @@ export function assertProviderSupportsAttachment({
   modelId,
   attachment,
 }: {
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   modelId: string;
   attachment: { kind: "image" | "file"; mediaType: string };
 }) {

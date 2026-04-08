@@ -5,16 +5,18 @@ Fast summaries from URLs, files, and media. Works in the terminal, a Chrome Side
 ## Highlights
 
 - Chrome Side Panel **chat** (streaming agent + history) inside the sidebar.
-- **YouTube slides**: screenshots + OCR + transcript cards, timestamped seek, OCR/Transcript toggle.
+- **Video slides**: screenshots + OCR + transcript cards for YouTube, direct video URLs, and local video files.
 - Media-aware summaries: auto‑detect video/audio vs page content.
+- Coding CLI backends: Codex, Claude, Gemini, Cursor Agent, OpenClaw, OpenCode.
 - Streaming Markdown + metrics + cache‑aware status.
 - CLI supports URLs, files, podcasts, YouTube, audio/video, PDFs.
 
 ## Feature overview
 
 - URLs, files, and media: web pages, PDFs, images, audio/video, YouTube, podcasts, RSS.
-- Slide extraction for video sources (YouTube/direct media) with OCR + timestamped cards.
+- Slide extraction for video sources (YouTube, direct video URLs, local video files) with OCR + timestamped cards.
 - Transcript-first media flow: published transcripts when available, then Groq/ONNX/whisper.cpp/AssemblyAI/Gemini/OpenAI/FAL transcription fallback when not.
+- Coding CLI providers: Claude, Codex, Gemini, Cursor Agent, OpenClaw, OpenCode.
 - Streaming output with Markdown rendering, metrics, and cache-aware status.
 - Local, paid, and free models: OpenAI‑compatible local endpoints, paid providers, plus an OpenRouter free preset.
 - Output modes: Markdown/text, JSON diagnostics, extract-only, metrics, timing, and cost estimates.
@@ -36,7 +38,7 @@ YouTube slide screenshots (from the browser):
 
 1. Install the CLI (choose one):
    - **npm** (cross‑platform): `npm i -g @steipete/summarize`
-   - **Homebrew** (macOS arm64): `brew install steipete/tap/summarize`
+   - **Homebrew** (Homebrew/core): `brew install summarize`
 2. Install the extension (Chrome Web Store link above) and open the Side Panel.
 3. The panel shows a token + install command. Run it in Terminal:
    - `summarize daemon install --token <TOKEN>`
@@ -54,6 +56,7 @@ Notes:
 - Auto mode summarizes on navigation (incl. SPAs); otherwise use the button.
 - Daemon is localhost-only and requires a shared token; rerunning `summarize daemon install --token <TOKEN>` adds another paired browser token instead of invalidating the old one.
 - Autostart: macOS (launchd), Linux (systemd user), Windows (Scheduled Task).
+- Windows containers: `summarize daemon install` starts the daemon for the current container session but does not register a Scheduled Task. Run it each time the container starts or add that command to your container startup, and publish port `8787` so the host browser can reach the daemon.
 - Tip: configure `free` via `summarize refresh-free` (needs `OPENROUTER_API_KEY`). Add `--set-default` to set model=`free`.
 
 More:
@@ -112,14 +115,14 @@ npm i @steipete/summarize-core
 import { createLinkPreviewClient } from "@steipete/summarize-core/content";
 ```
 
-- Homebrew (custom tap):
+- Homebrew:
 
 ```bash
-brew install steipete/tap/summarize
+brew install summarize
 ```
 
-Homebrew availability depends on the current tap formula for your architecture.
-If Homebrew install fails on Intel/x64, use the npm global install above.
+Homebrew ships from `homebrew/core` via `brew install summarize`.
+If Homebrew is unavailable in your environment, use the npm global install above.
 
 ### Optional local dependencies
 
@@ -207,9 +210,17 @@ Spotify episode page (best-effort; may fail for exclusives):
 summarize "https://open.spotify.com/episode/5auotqWAXhhKyb9ymCuBJY"
 ```
 
+HLS playlist:
+
+```bash
+summarize "https://example.com/master.m3u8"
+```
+
 ### Output length
 
 `--length` controls how much output we ask for (guideline), not a hard cap.
+
+Set a default in `~/.summarize/config.json` with `output.length`.
 
 ```bash
 summarize "https://example.com" --length long
@@ -253,7 +264,12 @@ Use gateway-style ids: `<provider>/<model>`.
 
 Examples:
 
+- `openai/gpt-5.4`
+- `openai/gpt-5.4-mini`
+- `openai/gpt-5.4-nano`
 - `openai/gpt-5-mini`
+- `openai/gpt-5-nano`
+- `github-copilot/gpt-5.4`
 - `anthropic/claude-sonnet-4-5`
 - `xai/grok-4-fast-non-reasoning`
 - `google/gemini-3-flash`
@@ -261,6 +277,7 @@ Examples:
 - `openrouter/openai/gpt-5-mini` (force OpenRouter)
 
 Note: some models/providers do not support streaming or certain file media types. When that happens, the CLI prints a friendly error (or auto-disables streaming for that model when supported by the provider).
+`gpt-5.4-mini` and `gpt-5.4-nano` are treated as real model ids; the same shorthand also works under `github-copilot/...`.
 
 ### Limits
 
@@ -283,7 +300,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 - `--length short|medium|long|xl|xxl|s|m|l|<chars>`
 - `--language, --lang <language>`: output language (`auto` = match source)
 - `--max-output-tokens <count>`: hard cap for LLM output tokens
-- `--cli [provider]`: use a CLI provider (`--model cli/<provider>`). Supports `claude`, `gemini`, `codex`, `agent`. If omitted, uses auto selection with CLI enabled.
+- `--cli [provider]`: use a CLI provider (`--model cli/<provider>`). Supports `claude`, `gemini`, `codex`, `agent`, `openclaw`, `opencode`. If omitted, uses auto selection with CLI enabled.
 - `--stream auto|on|off`: stream LLM output (`auto` = TTY only; disabled in `--json` mode)
 - `--plain`: keep raw output (no ANSI/OSC Markdown rendering)
 - `--no-color`: disable ANSI colors
@@ -294,7 +311,7 @@ Use `summarize --help` or `summarize help` for the full help text.
   - Install `uvx`: `brew install uv` (or https://astral.sh/uv/)
 - `--extract`: print extracted content and exit (URLs only; stdin `-` is not supported)
   - Deprecated alias: `--extract-only`
-- `--slides`: extract slides for YouTube/direct video URLs and render them inline in the summary narrative (auto-renders inline in supported terminals)
+- `--slides`: extract slides for YouTube, direct video URLs, or local video files and render them inline in the summary narrative (auto-renders inline in supported terminals)
 - `--slides-ocr`: run OCR on extracted slides (requires `tesseract`)
 - `--slides-dir <dir>`: base output dir for slide images (default `./slides`)
 - `--slides-scene-threshold <value>`: scene detection threshold (0.1-1.0)
@@ -304,7 +321,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 - `--verbose`: debug/diagnostics on stderr
 - `--metrics off|on|detailed`: metrics output (default `on`)
 
-### Coding CLIs (Codex, Claude, Gemini, Agent)
+### Coding CLIs (Codex, Claude, Gemini, Agent, OpenClaw, OpenCode)
 
 Summarize can use common coding CLIs as local model backends:
 
@@ -312,11 +329,13 @@ Summarize can use common coding CLIs as local model backends:
 - `claude` -> `--cli claude` / `--model cli/claude/<model>`
 - `gemini` -> `--cli gemini` / `--model cli/gemini/<model>`
 - `agent` (Cursor Agent CLI) -> `--cli agent` / `--model cli/agent/<model>`
+- `openclaw` -> `--cli openclaw` / `--model cli/openclaw/<model>` or `--model openclaw/<model>`
+- `opencode` -> `--cli opencode` / `--model cli/opencode/<model>` (`--model cli/opencode` uses the OpenCode runtime default)
 
 Requirements:
 
-- Binary installed and on `PATH` (or set `CODEX_PATH`, `CLAUDE_PATH`, `GEMINI_PATH`, `AGENT_PATH`)
-- Provider authenticated (`codex login`, `claude auth`, `gemini` login flow, `agent login` or `CURSOR_API_KEY`)
+- Binary installed and on `PATH` (or set `CODEX_PATH`, `CLAUDE_PATH`, `GEMINI_PATH`, `AGENT_PATH`, `OPENCLAW_PATH`, `OPENCODE_PATH`)
+- Provider authenticated (`codex login`, `claude auth`, `gemini` login flow, `agent login` or `CURSOR_API_KEY`, `opencode auth login`)
 
 Quick smoke test:
 
@@ -327,13 +346,15 @@ summarize --cli codex --plain --timeout 2m /tmp/summarize-cli-smoke.txt
 summarize --cli claude --plain --timeout 2m /tmp/summarize-cli-smoke.txt
 summarize --cli gemini --plain --timeout 2m /tmp/summarize-cli-smoke.txt
 summarize --cli agent --plain --timeout 2m /tmp/summarize-cli-smoke.txt
+summarize --cli openclaw --plain --timeout 2m /tmp/summarize-cli-smoke.txt
+summarize --cli opencode --plain --timeout 2m /tmp/summarize-cli-smoke.txt
 ```
 
 Set explicit CLI allowlist/order:
 
 ```json
 {
-  "cli": { "enabled": ["codex", "claude", "gemini", "agent"] }
+  "cli": { "enabled": ["codex", "claude", "gemini", "agent", "openclaw", "opencode"] }
 }
 ```
 
@@ -345,7 +366,7 @@ Configure implicit auto CLI fallback:
     "autoFallback": {
       "enabled": true,
       "onlyWhenNoApiKeys": true,
-      "order": ["claude", "gemini", "codex", "agent"]
+      "order": ["claude", "gemini", "codex", "agent", "openclaw", "opencode"]
     }
   }
 }
@@ -361,7 +382,7 @@ CLI attempts are prepended when:
 - `cli.enabled` is set (explicit allowlist/order), or
 - implicit auto selection is active and `cli.autoFallback` is enabled.
 
-Default fallback behavior: only when no API keys are configured, order `claude, gemini, codex, agent`, and remember/prioritize last successful provider (`~/.summarize/cli-state.json`).
+Default fallback behavior: only when no API keys are configured, order `claude, gemini, codex, agent, openclaw, opencode`, and remember/prioritize last successful provider (`~/.summarize/cli-state.json`).
 
 Set explicit CLI attempts:
 
@@ -418,7 +439,7 @@ Environment variables for yt-dlp mode:
 
 Apify costs money but tends to be more reliable when captions exist.
 
-### Slide extraction (YouTube + direct video URLs)
+### Slide extraction (YouTube + direct video URLs + local video files)
 
 Extract slide screenshots (scene detection via `ffmpeg`) and optional OCR:
 
@@ -431,6 +452,7 @@ Requirements:
 ```bash
 summarize "https://www.youtube.com/watch?v=..." --slides
 summarize "https://www.youtube.com/watch?v=..." --slides --slides-ocr
+summarize "/path/to/video.webm" --slides
 ```
 
 Outputs are written under `./slides/<sourceId>/` (or `--slides-dir`). OCR results are included in JSON output
@@ -439,7 +461,7 @@ extractor also samples at a fixed interval to improve coverage.
 When using `--slides`, supported terminals (kitty/iTerm/Konsole) render inline thumbnails automatically inside the
 summary narrative (the model inserts `[slide:N]` markers). Timestamp links are clickable when the terminal supports
 OSC-8 (YouTube/Vimeo/Loom/Dropbox). If inline images are unsupported, Summarize prints a note with the on-disk
-slide directory.
+slide directory. Local video files stay on the slide-aware path, transcribe in place, and avoid fake download labels.
 
 Use `--slides --extract` to print the full timed transcript and insert slide images inline at matching timestamps.
 
@@ -511,6 +533,7 @@ Supported keys today:
 {
   "model": { "id": "openai/gpt-5-mini" },
   "env": { "OPENAI_API_KEY": "sk-..." },
+  "output": { "length": "long" },
   "ui": { "theme": "ember" }
 }
 ```
@@ -530,6 +553,7 @@ Also supported:
 - `models` (define presets selectable via `--model <preset>`)
 - `env` (generic env var defaults; process env still wins)
 - `apiKeys` (legacy shortcut, mapped to env names; prefer `env` for new configs)
+- `output.length` (default `--length`: `short|medium|long|xl|xxl|20k`)
 - `cache.media` (media download cache: TTL 7 days, 2048 MB cap by default; `--no-media-cache` disables)
 - `media.videoMode: "auto"|"transcript"|"understand"`
 - `slides.enabled` / `slides.max` / `slides.ocr` / `slides.dir` (defaults for `--slides`)

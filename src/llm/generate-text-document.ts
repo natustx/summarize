@@ -3,6 +3,7 @@ import {
   isGoogleEmptySummaryError,
   resolveGoogleEmptyResponseFallbackModelId,
 } from "./generate-text-shared.js";
+import type { LlmProvider } from "./model-id.js";
 import type { Prompt } from "./prompt.js";
 import {
   resolveOpenAiCompatibleClientConfigForProvider,
@@ -17,7 +18,7 @@ import { completeOpenAiDocument } from "./providers/openai.js";
 import type { LlmTokenUsage } from "./types.js";
 
 type ParsedModel = {
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   model: string;
   canonical: string;
 };

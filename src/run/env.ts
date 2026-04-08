@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { accessSync, constants as fsConstants } from "node:fs";
 import path from "node:path";
 import type { CliProvider, SummarizeConfig } from "../config.js";
@@ -31,6 +32,27 @@ export function resolveExecutableInPath(
   return null;
 }
 
+export async function canSpawnCommand({
+  command,
+  args = ["--help"],
+  env,
+}: {
+  command: string;
+  args?: string[];
+  env: Record<string, string | undefined>;
+}): Promise<boolean> {
+  if (!command.trim()) return false;
+  return new Promise((resolve) => {
+    const proc = spawn(command, args, {
+      stdio: ["ignore", "ignore", "ignore"],
+      env,
+      windowsHide: true,
+    });
+    proc.on("error", () => resolve(false));
+    proc.on("close", (code) => resolve(code === 0));
+  });
+}
+
 export function hasBirdCli(env: Record<string, string | undefined>): boolean {
   return resolveExecutableInPath("bird", env) !== null;
 }
@@ -54,7 +76,7 @@ export function resolveCliAvailability({
   config: ConfigForCli;
 }): Partial<Record<CliProvider, boolean>> {
   const cliConfig = config?.cli ?? null;
-  const providers: CliProvider[] = ["claude", "codex", "gemini", "agent"];
+  const providers: CliProvider[] = ["claude", "codex", "gemini", "agent", "openclaw", "opencode"];
   const availability: Partial<Record<CliProvider, boolean>> = {};
   for (const provider of providers) {
     if (isCliDisabled(provider, cliConfig)) {
@@ -80,7 +102,9 @@ export function parseCliUserModelId(modelId: string): {
     provider !== "claude" &&
     provider !== "codex" &&
     provider !== "gemini" &&
-    provider !== "agent"
+    provider !== "agent" &&
+    provider !== "openclaw" &&
+    provider !== "opencode"
   ) {
     throw new Error(`Invalid CLI model id "${modelId}". Expected cli/<provider>/<model>.`);
   }
@@ -94,7 +118,9 @@ export function parseCliProviderArg(raw: string): CliProvider {
     normalized === "claude" ||
     normalized === "codex" ||
     normalized === "gemini" ||
-    normalized === "agent"
+    normalized === "agent" ||
+    normalized === "openclaw" ||
+    normalized === "opencode"
   ) {
     return normalized as CliProvider;
   }

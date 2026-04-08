@@ -37,6 +37,24 @@ describe("model spec parsing", () => {
     expect(parsed.requiredEnv).toBe("CLI_AGENT");
   });
 
+  it("defaults openclaw cli models when missing", () => {
+    const parsed = parseRequestedModelId("cli/openclaw");
+    expect(parsed.kind).toBe("fixed");
+    expect(parsed.transport).toBe("cli");
+    expect(parsed.cliProvider).toBe("openclaw");
+    expect(parsed.cliModel).toBe("main");
+    expect(parsed.requiredEnv).toBe("CLI_OPENCLAW");
+  });
+
+  it("parses openclaw shorthand model ids", () => {
+    const parsed = parseRequestedModelId("openclaw/custom-agent");
+    expect(parsed.kind).toBe("fixed");
+    expect(parsed.transport).toBe("cli");
+    expect(parsed.cliProvider).toBe("openclaw");
+    expect(parsed.cliModel).toBe("custom-agent");
+    expect(parsed.userModelId).toBe("openclaw/custom-agent");
+  });
+
   it("defaults gemini cli models when missing", () => {
     const parsed = parseRequestedModelId("cli/gemini");
     expect(parsed.kind).toBe("fixed");
@@ -44,6 +62,16 @@ describe("model spec parsing", () => {
     expect(parsed.cliProvider).toBe("gemini");
     expect(parsed.cliModel).toBe("gemini-3-flash");
     expect(parsed.requiredEnv).toBe("CLI_GEMINI");
+  });
+
+  it("uses the OpenCode runtime default model when missing", () => {
+    const parsed = parseRequestedModelId("cli/opencode");
+    expect(parsed.kind).toBe("fixed");
+    expect(parsed.transport).toBe("cli");
+    expect(parsed.userModelId).toBe("cli/opencode");
+    expect(parsed.cliProvider).toBe("opencode");
+    expect(parsed.cliModel).toBeNull();
+    expect(parsed.requiredEnv).toBe("CLI_OPENCODE");
   });
 
   it("rejects invalid cli providers", () => {
@@ -94,5 +122,15 @@ describe("model spec parsing", () => {
     expect(nvidia.provider).toBe("nvidia");
     expect(nvidia.requiredEnv).toBe("NVIDIA_API_KEY");
     expect(nvidia.llmModelId).toBe("nvidia/z-ai/glm5");
+  });
+
+  it("parses github-copilot model ids as native gateway models", () => {
+    const parsed = parseRequestedModelId("github-copilot/gpt-4.1");
+    expect(parsed.kind).toBe("fixed");
+    expect(parsed.transport).toBe("native");
+    expect(parsed.provider).toBe("github-copilot");
+    expect(parsed.requiredEnv).toBe("GITHUB_TOKEN");
+    expect(parsed.llmModelId).toBe("github-copilot/openai/gpt-4.1");
+    expect(parsed.forceChatCompletions).toBe(true);
   });
 });

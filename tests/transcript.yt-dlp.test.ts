@@ -1,5 +1,9 @@
 import { EventEmitter } from "node:events";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { PassThrough } from "node:stream";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -14,10 +18,14 @@ const falMock = vi.hoisted(() => ({
 }));
 
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
-vi.mock("node:fs", () => ({
-  promises: fsMock,
-  openAsBlob: fsMock.openAsBlob,
-}));
+vi.mock("node:fs", async () => {
+  const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+  return {
+    ...actual,
+    promises: fsMock,
+    openAsBlob: fsMock.openAsBlob,
+  };
+});
 vi.mock("@fal-ai/client", () => falMock);
 
 import { fetchTranscriptWithYtDlp } from "../packages/core/src/content/transcript/providers/youtube/yt-dlp.js";
@@ -67,6 +75,39 @@ describe("yt-dlp transcript helper", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     globalThis.fetch = originalFetch;
+  });
+
+  it("skips yt-dlp download for local file URLs", async () => {
+    const root = await mkdtemp(join(tmpdir(), "summarize-ytdlp-local-"));
+    const filePath = join(root, "local-video.webm");
+    await writeFile(filePath, new Uint8Array([1, 2, 3]));
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify({ text: "Local transcript" }), { status: 200 }),
+    );
+
+    try {
+      const events: string[] = [];
+      const result = await fetchTranscriptWithYtDlp({
+        ytDlpPath: "/usr/bin/yt-dlp",
+        groqApiKey: null,
+        openaiApiKey: "OPENAI",
+        falApiKey: null,
+        url: pathToFileURL(filePath).href,
+        mediaKind: "video",
+        onProgress: (event) => events.push(event.kind),
+      });
+
+      expect(result.text).toBe("Local transcript");
+      expect(result.provider).toBe("openai");
+      expect(events).not.toContain("transcript-media-download-start");
+      expect(spawnMock).not.toHaveBeenCalledWith(
+        "/usr/bin/yt-dlp",
+        expect.anything(),
+        expect.anything(),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("returns a helpful error when yt-dlp path is missing", async () => {
@@ -123,6 +164,32 @@ describe("yt-dlp transcript helper", () => {
 
     expect(result.text).toBeNull();
     expect(result.error?.message).toMatch(/yt-dlp exited with code 1/);
+  });
+
+  it("returns empty text and a note when yt-dlp fails with 'unable to obtain file audio codec'", async () => {
+    spawnMock.mockImplementation(() => {
+      const proc = new EventEmitter() as any;
+      proc.stdout = new PassThrough();
+      proc.stderr = new PassThrough();
+      process.nextTick(() => {
+        proc.stderr.write(
+          "ERROR: Postprocessing: WARNING: unable to obtain file audio codec with ffprobe\n",
+        );
+        proc.stderr.end();
+        process.nextTick(() => proc.emit("close", 1, null));
+      });
+      return proc;
+    });
+
+    const result = await fetchTranscriptWithYtDlp({
+      ytDlpPath: "/usr/bin/yt-dlp",
+      openaiApiKey: "OPENAI",
+      url: "https://youtu.be/dQw4w9WgXcQ",
+    });
+
+    expect(result.text).toBe("");
+    expect(result.error).toBeNull();
+    expect(result.notes).toContain("yt-dlp: Media has no audio stream");
   });
 
   it("passes --no-playlist to yt-dlp", async () => {

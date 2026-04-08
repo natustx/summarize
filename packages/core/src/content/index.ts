@@ -36,8 +36,10 @@ export {
 export {
   DIRECT_MEDIA_EXTENSIONS,
   extractYouTubeVideoId,
+  inferDirectMediaKind,
   isDirectMediaExtension,
   isDirectMediaUrl,
+  isDirectVideoInput,
   isPodcastHost,
   isTwitterBroadcastUrl,
   isTwitterStatusUrl,

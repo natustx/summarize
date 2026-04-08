@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { spawnTracked } from "../../../../processes.js";
 import {
   probeMediaDurationSecondsWithFfprobe,
@@ -12,6 +12,7 @@ import { buildMissingTranscriptionProviderMessage } from "../../../../transcript
 import type { MediaCache } from "../../../cache/types.js";
 import type { LinkPreviewProgressEvent } from "../../../link-preview/deps.js";
 import { ProgressKind } from "../../../link-preview/deps.js";
+import { resolveLocalDirectMediaSource } from "../../../local-file.js";
 import {
   resolveTranscriptionConfig,
   type TranscriptionConfig,
@@ -104,13 +105,22 @@ export const fetchTranscriptWithYtDlp = async ({
   const progress = typeof onProgress === "function" ? onProgress : null;
   const providerHint = startInfo.providerHint;
   const modelId = startInfo.modelId;
-  const cachedMedia = mediaCache ? await mediaCache.get({ url }) : null;
+  const localFileInput = resolveLocalDirectMediaSource(url, mediaKind);
+  const cachedMedia = localFileInput ? null : mediaCache ? await mediaCache.get({ url }) : null;
 
   const outputFile = join(tmpdir(), `summarize-${randomUUID()}.mp3`);
-  let filePath = cachedMedia?.filePath ?? outputFile;
-  let shouldCleanup = !cachedMedia?.filePath;
+  let filePath = localFileInput?.filePath ?? cachedMedia?.filePath ?? outputFile;
+  let mediaType = localFileInput?.mediaType ?? "audio/mpeg";
+  let filename =
+    localFileInput?.filename ??
+    cachedMedia?.filename ??
+    (cachedMedia?.filePath ? basename(cachedMedia.filePath) : null) ??
+    "audio.mp3";
+  let shouldCleanup = !localFileInput?.filePath && !cachedMedia?.filePath;
   try {
-    if (cachedMedia?.filePath) {
+    if (localFileInput) {
+      notes.push("local file input");
+    } else if (cachedMedia?.filePath) {
       progress?.({
         kind: ProgressKind.TranscriptMediaDownloadStart,
         url,
@@ -192,8 +202,8 @@ export const fetchTranscriptWithYtDlp = async ({
     });
     const result = await transcribeMediaFileWithWhisper({
       filePath,
-      mediaType: "audio/mpeg",
-      filename: "audio.mp3",
+      mediaType,
+      filename,
       groqApiKey: effectiveTranscription.groqApiKey,
       assemblyaiApiKey: effectiveTranscription.assemblyaiApiKey,
       geminiApiKey: effectiveTranscription.geminiApiKey,
@@ -216,6 +226,17 @@ export const fetchTranscriptWithYtDlp = async ({
     if (result.notes.length > 0) notes.push(...result.notes);
     return { text: result.text, provider: result.provider, error: result.error, notes };
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("unable to obtain file audio codec with ffprobe")
+    ) {
+      return {
+        text: "",
+        provider: null,
+        error: null,
+        notes: [...notes, "yt-dlp: Media has no audio stream"],
+      };
+    }
     return {
       text: null,
       provider: null,

@@ -2,6 +2,7 @@ import type { OutputLanguage } from "../language.js";
 import { formatOutputLanguageInstruction } from "../language.js";
 import type { LlmTokenUsage } from "./generate-text.js";
 import { generateTextWithModelId } from "./generate-text.js";
+import type { LlmProvider } from "./model-id.js";
 
 const MAX_TRANSCRIPT_INPUT_CHARACTERS = 200_000;
 
@@ -87,11 +88,7 @@ export function createTranscriptToMarkdownConverter({
     delayMs: number;
     error: unknown;
   }) => void;
-  onUsage?: (usage: {
-    model: string;
-    provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
-    usage: LlmTokenUsage | null;
-  }) => void;
+  onUsage?: (usage: { model: string; provider: LlmProvider; usage: LlmTokenUsage | null }) => void;
 }): ConvertTranscriptToMarkdown {
   return async ({ title, source, transcript, timeoutMs, outputLanguage }) => {
     const trimmedTranscript =

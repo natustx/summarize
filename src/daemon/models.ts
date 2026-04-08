@@ -138,6 +138,8 @@ export async function buildModelPickerOptions({
     cliGemini: boolean;
     cliCodex: boolean;
     cliAgent: boolean;
+    cliOpenclaw: boolean;
+    cliOpencode: boolean;
   };
   openaiBaseUrl: string | null;
   localModelsSource: { kind: "openai-compatible"; baseUrlHost: string } | null;
@@ -156,12 +158,16 @@ export async function buildModelPickerOptions({
     cliGemini: false,
     cliCodex: false,
     cliAgent: false,
+    cliOpenclaw: false,
+    cliOpencode: false,
   };
   const cliAvailability = resolveCliAvailability({ env: envForRun, config: configForCli });
   providers.cliClaude = Boolean(cliAvailability.claude);
   providers.cliGemini = Boolean(cliAvailability.gemini);
   providers.cliCodex = Boolean(cliAvailability.codex);
   providers.cliAgent = Boolean(cliAvailability.agent);
+  providers.cliOpenclaw = Boolean(cliAvailability.openclaw);
+  providers.cliOpencode = Boolean(cliAvailability.opencode);
 
   const options: ModelPickerOption[] = [{ id: "auto", label: "Auto" }];
 
@@ -176,6 +182,12 @@ export async function buildModelPickerOptions({
   }
   if (providers.cliAgent) {
     options.push({ id: "cli/agent", label: "CLI: Cursor Agent" });
+  }
+  if (providers.cliOpenclaw) {
+    options.push({ id: "cli/openclaw", label: "CLI: OpenClaw" });
+  }
+  if (providers.cliOpencode) {
+    options.push({ id: "cli/opencode", label: "CLI: OpenCode" });
   }
 
   if (providers.openrouter) {

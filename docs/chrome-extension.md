@@ -12,7 +12,7 @@ Quickstart:
 
 - Install summarize (choose one):
   - `npm i -g @steipete/summarize`
-  - `brew install steipete/tap/summarize` (macOS only)
+  - `brew install summarize` (macOS, Linux)
 - Build/load extension: `apps/chrome-extension/README.md`
 - Firefox sidebar build: `pnpm -C apps/chrome-extension build:firefox` (load via `about:debugging` → temporary add-on)
 - Open side panel → copy token install command → run:
@@ -44,6 +44,12 @@ Dev (repo checkout):
   - `summarize daemon install` now tries both launchd domains (`gui/<uid>` then `user/<uid>`).
   - Install as your normal user (not root) so HOME + launchd domain match.
   - Re-run: `summarize daemon install --token <TOKEN>`.
+- Windows containers:
+  - `summarize daemon install --token <TOKEN>` starts the daemon for the current container session but does not create a Scheduled Task.
+  - Run that command manually each time the container starts, or add it to your container startup. Also publish the daemon port in `docker-compose.yml`:
+    `ports: ['8787:8787']`
+    `command: ['cmd', '/c', 'summarize daemon install --token <TOKEN>']`
+  - Then restart the container and verify `http://127.0.0.1:8787/health`.
 - “Need extension-side traces”:
   - Options → Logs → `extension.log` (panel/background events).
   - Enable “Extended logging” in Advanced settings for full pipeline traces.

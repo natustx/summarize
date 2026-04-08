@@ -52,6 +52,12 @@ function captureStream() {
   return { stream, getText: () => text };
 }
 
+function resolveFetchUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 describe("cli config precedence", () => {
   it("uses config file model when --model and SUMMARIZE_MODEL are absent", async () => {
     mocks.completeSimple.mockClear();
@@ -61,7 +67,7 @@ describe("cli config precedence", () => {
       "<body><article><p>Hi</p></article></body></html>";
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = resolveFetchUrl(input);
       if (url === "https://example.com") return htmlResponse(html);
       throw new Error(`Unexpected fetch call: ${url}`);
     });
@@ -69,7 +75,7 @@ describe("cli config precedence", () => {
     const tempRoot = mkdtempSync(join(tmpdir(), "summarize-cli-config-"));
     const configPath = join(tempRoot, ".summarize", "config.json");
     mkdirSync(join(tempRoot, ".summarize"), { recursive: true });
-    writeFileSync(configPath, JSON.stringify({ model: { id: "openai/gpt-5.2" } }), "utf8");
+    writeFileSync(configPath, JSON.stringify({ model: { id: "openai/gpt-5-chat" } }), "utf8");
 
     await runCli(["--timeout", "2s", "https://example.com"], {
       env: { HOME: tempRoot, OPENAI_API_KEY: "test" },
@@ -89,7 +95,7 @@ describe("cli config precedence", () => {
       "<body><article><p>Hi</p></article></body></html>";
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = resolveFetchUrl(input);
       if (url === "https://example.com") return htmlResponse(html);
       throw new Error(`Unexpected fetch call: ${url}`);
     });
@@ -104,7 +110,7 @@ describe("cli config precedence", () => {
         models: {
           mypreset: {
             mode: "auto",
-            rules: [{ candidates: ["openai/gpt-5.2"] }],
+            rules: [{ candidates: ["openai/gpt-5-chat"] }],
           },
         },
       }),
@@ -138,7 +144,7 @@ describe("cli config precedence", () => {
       "<body><article><p>Hi</p></article></body></html>";
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = resolveFetchUrl(input);
       if (url === "https://example.com") return htmlResponse(html);
       throw new Error(`Unexpected fetch call: ${url}`);
     });
@@ -157,7 +163,7 @@ describe("cli config precedence", () => {
     await runCli(
       ["--timeout", "2s", "--extract", "--format", "text", "--json", "https://example.com"],
       {
-        env: { HOME: tempRoot, SUMMARIZE_MODEL: "openai/gpt-5.2" },
+        env: { HOME: tempRoot, SUMMARIZE_MODEL: "openai/gpt-5-chat" },
         fetch: fetchMock as unknown as typeof fetch,
         stdout: stdout.stream,
         stderr: noopStream(),
@@ -165,9 +171,81 @@ describe("cli config precedence", () => {
     );
 
     const parsed = JSON.parse(stdout.getText()) as { input: { model: string } };
-    expect(parsed.input.model).toBe("openai/gpt-5.2");
+    expect(parsed.input.model).toBe("openai/gpt-5-chat");
 
     // --extract means no LLM calls; ensure we didn't try to init a provider.
     expect(mocks.completeSimple).toHaveBeenCalledTimes(0);
+  });
+
+  it("uses config file output.length when --length is absent", async () => {
+    mocks.completeSimple.mockClear();
+
+    const html =
+      "<!doctype html><html><head><title>Hello</title></head>" +
+      "<body><article><p>Hi</p></article></body></html>";
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = resolveFetchUrl(input);
+      if (url === "https://example.com") return htmlResponse(html);
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+
+    const tempRoot = mkdtempSync(join(tmpdir(), "summarize-cli-config-"));
+    const configPath = join(tempRoot, ".summarize", "config.json");
+    mkdirSync(join(tempRoot, ".summarize"), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ model: { id: "openai/gpt-5-chat" }, output: { length: "short" } }),
+      "utf8",
+    );
+
+    const stdout = captureStream();
+
+    await runCli(["--timeout", "2s", "--json", "https://example.com"], {
+      env: { HOME: tempRoot, OPENAI_API_KEY: "test" },
+      fetch: fetchMock as unknown as typeof fetch,
+      stdout: stdout.stream,
+      stderr: noopStream(),
+    });
+
+    const parsed = JSON.parse(stdout.getText()) as { input: { length: { preset: string } } };
+    expect(parsed.input.length).toEqual({ kind: "preset", preset: "short" });
+  });
+
+  it("prefers --length over config file output.length", async () => {
+    mocks.completeSimple.mockClear();
+
+    const html =
+      "<!doctype html><html><head><title>Hello</title></head>" +
+      "<body><article><p>Hi</p></article></body></html>";
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = resolveFetchUrl(input);
+      if (url === "https://example.com") return htmlResponse(html);
+      throw new Error(`Unexpected fetch call: ${url}`);
+    });
+
+    const tempRoot = mkdtempSync(join(tmpdir(), "summarize-cli-config-"));
+    const configPath = join(tempRoot, ".summarize", "config.json");
+    mkdirSync(join(tempRoot, ".summarize"), { recursive: true });
+    writeFileSync(
+      configPath,
+      JSON.stringify({ model: { id: "openai/gpt-5-chat" }, output: { length: "short" } }),
+      "utf8",
+    );
+
+    const stdout = captureStream();
+
+    await runCli(["--timeout", "2s", "--length", "20k", "--json", "https://example.com"], {
+      env: { HOME: tempRoot, OPENAI_API_KEY: "test" },
+      fetch: fetchMock as unknown as typeof fetch,
+      stdout: stdout.stream,
+      stderr: noopStream(),
+    });
+
+    const parsed = JSON.parse(stdout.getText()) as {
+      input: { length: { kind: string; maxCharacters: number } };
+    };
+    expect(parsed.input.length).toEqual({ kind: "chars", maxCharacters: 20000 });
   });
 });

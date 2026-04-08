@@ -28,6 +28,12 @@ read_when:
 - Remote transcription providers: `ASSEMBLYAI_API_KEY`, `GEMINI_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `FAL_KEY` (plus `GROQ_API_KEY` before local/remote fallback).
 - Gemini uses the Files API automatically for larger uploads.
 
+## Shared helpers
+
+- Direct media classification lives in `packages/core/src/content/direct-media.ts`.
+- Local path/`file://` normalization + mtime lookup lives in `packages/core/src/content/local-file.ts`.
+- Slides, URL extraction, and transcription should reuse those helpers instead of re-parsing extensions separately.
+
 ## Chrome extension behavior
 
 - When media is detected on a page, the Summarize button gains a dropdown caret (Page/Video or Page/Audio).

@@ -54,6 +54,17 @@ export function resolveOptionsUrl(): string {
   return chrome.runtime.getURL(page);
 }
 
+function isContentTabUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  return !(
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("chrome://") ||
+    url.startsWith("moz-extension://") ||
+    url.startsWith("edge://") ||
+    url.startsWith("about:")
+  );
+}
+
 export async function openOptionsWindow() {
   const url = resolveOptionsUrl();
   try {
@@ -86,25 +97,15 @@ export async function getActiveTab(windowId?: number): Promise<chrome.tabs.Tab |
       ? { active: true, windowId }
       : { active: true, currentWindow: true };
   const [activeTab] = await chrome.tabs.query(query);
-  if (
-    activeTab?.url &&
-    !activeTab.url.startsWith("chrome-extension://") &&
-    !activeTab.url.startsWith("chrome://")
-  ) {
+  if (isContentTabUrl(activeTab?.url)) {
     return activeTab;
   }
 
   const fallbackTabs = await chrome.tabs.query(
     typeof windowId === "number" ? { windowId } : { currentWindow: true },
   );
-  const contentTab =
-    fallbackTabs.find(
-      (tab) =>
-        typeof tab.url === "string" &&
-        !tab.url.startsWith("chrome-extension://") &&
-        !tab.url.startsWith("chrome://"),
-    ) ?? null;
-  return contentTab ?? activeTab ?? null;
+  const contentTab = fallbackTabs.find((tab) => isContentTabUrl(tab.url)) ?? null;
+  return contentTab;
 }
 
 export function normalizeUrl(value: string) {

@@ -8,10 +8,12 @@ import {
   promptToContext,
   resolveEffectiveTemperature,
   resolveGoogleEmptyResponseFallbackModelId,
+  shouldRetryGpt5WithoutTokenCap,
   sleep,
 } from "./generate-text-shared.js";
 import { streamTextWithContext } from "./generate-text-stream.js";
 import { parseGatewayStyleModelId } from "./model-id.js";
+import type { LlmProvider } from "./model-id.js";
 import type { Prompt } from "./prompt.js";
 import { resolveOpenAiCompatibleClientConfigForProvider } from "./provider-capabilities.js";
 import {
@@ -92,7 +94,7 @@ export async function generateTextWithModelId({
 }): Promise<{
   text: string;
   canonicalModelId: string;
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   usage: LlmTokenUsage | null;
 }> {
   const parsed = parseGatewayStyleModelId(modelId);
@@ -141,9 +143,11 @@ export async function generateTextWithModelId({
 
   const context = promptToContext(prompt);
 
-  const resolveOpenAiConfig = (): OpenAiClientConfig =>
+  const resolveOpenAiConfig = (
+    provider: "openai" | "github-copilot" = "openai",
+  ): OpenAiClientConfig =>
     resolveOpenAiCompatibleClientConfigForProvider({
-      provider: "openai",
+      provider,
       openaiApiKey: apiKeys.openaiApiKey,
       openrouterApiKey: apiKeys.openrouterApiKey,
       forceOpenRouter,
@@ -297,8 +301,8 @@ export async function generateTextWithModelId({
         };
       }
 
-      if (parsed.provider === "openai") {
-        const openaiConfig = resolveOpenAiConfig();
+      if (parsed.provider === "openai" || parsed.provider === "github-copilot") {
+        const openaiConfig = resolveOpenAiConfig(parsed.provider);
         const result = await completeOpenAiText({
           modelId: parsed.model,
           openaiConfig,
@@ -306,10 +310,13 @@ export async function generateTextWithModelId({
           temperature: effectiveTemperature,
           maxOutputTokens,
           signal: controller.signal,
+          fetchImpl,
         });
         return {
           text: result.text,
-          canonicalModelId: parsed.canonical,
+          canonicalModelId: result.resolvedModelId
+            ? `${parsed.provider}/${result.resolvedModelId}`
+            : parsed.canonical,
           provider: parsed.provider,
           usage: result.usage,
         };
@@ -326,6 +333,32 @@ export async function generateTextWithModelId({
         parsed.provider === "google" &&
         isGoogleEmptySummaryError(normalizedError) &&
         resolveGoogleEmptyResponseFallbackModelId(parsed.canonical);
+      if (
+        shouldRetryGpt5WithoutTokenCap({
+          provider: parsed.provider,
+          model: parsed.model,
+          maxOutputTokens,
+          error: normalizedError,
+        })
+      ) {
+        return generateTextWithModelId({
+          modelId: parsed.canonical,
+          apiKeys,
+          prompt,
+          temperature,
+          timeoutMs,
+          fetchImpl,
+          forceOpenRouter,
+          openaiBaseUrlOverride,
+          anthropicBaseUrlOverride,
+          googleBaseUrlOverride,
+          xaiBaseUrlOverride,
+          zaiBaseUrlOverride,
+          forceChatCompletions,
+          retries: Math.max(0, maxRetries - attempt),
+          onRetry,
+        });
+      }
       if (googleFallbackModelId) {
         return generateTextWithModelId({
           modelId: googleFallbackModelId,
@@ -397,7 +430,7 @@ export async function streamTextWithModelId({
 }): Promise<{
   textStream: AsyncIterable<string>;
   canonicalModelId: string;
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   usage: Promise<LlmTokenUsage | null>;
   lastError: () => unknown;
 }> {

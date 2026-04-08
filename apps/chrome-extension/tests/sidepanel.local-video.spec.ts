@@ -11,7 +11,6 @@ import {
   createSampleVideo,
   hasFfmpeg,
   isPortInUse,
-  readDaemonToken,
   startDaemonSlidesRun,
   waitForSlidesSnapshot,
 } from "./helpers/daemon-fixtures";
@@ -46,13 +45,7 @@ test("sidepanel extracts slides from local video via daemon", async ({
     test.skip(true, "ffmpeg is required for slide extraction.");
   }
   if (await isPortInUse(DAEMON_PORT)) {
-    const token = readDaemonToken();
-    if (!token) {
-      test.skip(
-        true,
-        `Port ${DAEMON_PORT} is in use, but daemon token is missing. Set SUMMARIZE_DAEMON_TOKEN or ensure ~/.summarize/daemon.json exists.`,
-      );
-    }
+    test.skip(true, `Port ${DAEMON_PORT} is in use; local video E2E needs an isolated daemon.`);
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "summarize-slides-e2e-"));
@@ -142,38 +135,34 @@ test("sidepanel extracts slides from local video via daemon", async ({
     });
   });
 
-  const portBusy = await isPortInUse(DAEMON_PORT);
-  const externalToken = portBusy ? readDaemonToken() : null;
-  const token = externalToken ?? DEFAULT_DAEMON_TOKEN;
-  const homeDir = portBusy ? null : fs.mkdtempSync(path.join(os.tmpdir(), "summarize-daemon-e2e-"));
-  const abortController = portBusy ? null : new AbortController();
+  const token = DEFAULT_DAEMON_TOKEN;
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "summarize-daemon-e2e-"));
+  const abortController = new AbortController();
   let daemonPromise: Promise<void> | null = null;
 
-  if (!portBusy) {
-    let resolveReady: (() => void) | null = null;
-    const ready = new Promise<void>((resolve) => {
-      resolveReady = resolve;
-    });
-    const env = {
-      ...process.env,
-      HOME: homeDir ?? os.homedir(),
-      USERPROFILE: homeDir ?? os.homedir(),
-      TESSERACT_PATH: "/nonexistent",
-    };
-    for (const key of BLOCKED_ENV_KEYS) {
-      delete env[key];
-    }
-
-    daemonPromise = runDaemonServer({
-      env,
-      fetchImpl: fetch,
-      config: { token, port: DAEMON_PORT, version: 1, installedAt: new Date().toISOString() },
-      port: DAEMON_PORT,
-      signal: abortController?.signal,
-      onListening: () => resolveReady?.(),
-    });
-    await ready;
+  let resolveReady: (() => void) | null = null;
+  const ready = new Promise<void>((resolve) => {
+    resolveReady = resolve;
+  });
+  const env = {
+    ...process.env,
+    HOME: homeDir,
+    USERPROFILE: homeDir,
+    TESSERACT_PATH: "/nonexistent",
+  };
+  for (const key of BLOCKED_ENV_KEYS) {
+    delete env[key];
   }
+
+  daemonPromise = runDaemonServer({
+    env,
+    fetchImpl: fetch,
+    config: { token, port: DAEMON_PORT, version: 1, installedAt: new Date().toISOString() },
+    port: DAEMON_PORT,
+    signal: abortController.signal,
+    onListening: () => resolveReady?.(),
+  });
+  await ready;
 
   const harness = await launchExtension(getBrowserFromProject(testInfo.project.name));
 
@@ -240,13 +229,13 @@ test("sidepanel extracts slides from local video via daemon", async ({
 
     assertNoErrors(harness);
   } finally {
-    if (abortController && daemonPromise) {
+    if (daemonPromise !== null) {
       abortController.abort();
       await daemonPromise;
     }
     await closeExtension(harness.context, harness.userDataDir);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    if (homeDir) fs.rmSync(homeDir, { recursive: true, force: true });
+    fs.rmSync(homeDir, { recursive: true, force: true });
   }
 });

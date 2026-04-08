@@ -1,12 +1,14 @@
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  canSpawnCommand,
   hasUvxCli,
   parseBooleanEnv,
   parseCliProviderArg,
   parseCliUserModelId,
+  resolveCliAvailability,
   resolveExecutableInPath,
 } from "../src/run/env.js";
 
@@ -35,6 +37,23 @@ describe("run/env", () => {
     expect(hasUvxCli({ PATH: "" })).toBe(false);
   });
 
+  it("probes runnable commands by spawning them", async () => {
+    await expect(
+      canSpawnCommand({
+        command: process.execPath,
+        args: ["--version"],
+        env: process.env as Record<string, string | undefined>,
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      canSpawnCommand({
+        command: "definitely-missing-summarize-binary",
+        args: ["--help"],
+        env: process.env as Record<string, string | undefined>,
+      }),
+    ).resolves.toBe(false);
+  });
+
   it("parses cli model ids and provider args", () => {
     expect(parseCliUserModelId("cli/codex/gpt-5.2")).toEqual({
       provider: "codex",
@@ -44,7 +63,30 @@ describe("run/env", () => {
       provider: "gemini",
       model: null,
     });
+    expect(parseCliUserModelId("cli/openclaw/main")).toEqual({
+      provider: "openclaw",
+      model: "main",
+    });
+    expect(parseCliUserModelId("cli/opencode/openai/gpt-5.4")).toEqual({
+      provider: "opencode",
+      model: "openai/gpt-5.4",
+    });
     expect(parseCliProviderArg("  AGENT ")).toBe("agent");
+    expect(parseCliProviderArg(" openclaw ")).toBe("openclaw");
+    expect(parseCliProviderArg(" opencode ")).toBe("opencode");
+  });
+
+  it("detects OpenCode availability from PATH and respects cli.enabled", () => {
+    const opencode = makeBin("opencode");
+    const pathEnv = [opencode.dir].join(delimiter);
+
+    expect(resolveCliAvailability({ env: { PATH: pathEnv }, config: null }).opencode).toBe(true);
+    expect(
+      resolveCliAvailability({
+        env: { PATH: pathEnv },
+        config: { cli: { enabled: ["claude"] } },
+      }).opencode,
+    ).toBe(false);
   });
 
   it("rejects invalid cli providers and model ids", () => {

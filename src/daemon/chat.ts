@@ -1,8 +1,9 @@
 import type { Context, Message } from "@mariozechner/pi-ai";
-import type { SummarizeConfig } from "../config.js";
+import type { CliProvider, SummarizeConfig } from "../config.js";
 import { runCliModel } from "../llm/cli.js";
 import type { LlmApiKeys } from "../llm/generate-text.js";
 import { streamTextWithContext } from "../llm/generate-text.js";
+import { resolveGitHubModelsApiKey } from "../llm/github-models.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
 import { parseRequestedModelId } from "../model-spec.js";
 import { parseCliUserModelId } from "../run/env.js";
@@ -23,6 +24,26 @@ type ChatEvent = { event: string; data?: unknown };
 const SYSTEM_PROMPT = `You are Summarize Chat.
 
 You answer questions about the current page content. Keep responses concise and grounded in the page.`;
+
+function resolveConfiguredCliModel(
+  provider: CliProvider,
+  configForCli: SummarizeConfig | null | undefined,
+): string | null {
+  const cli = configForCli?.cli;
+  const raw =
+    provider === "claude"
+      ? cli?.claude?.model
+      : provider === "codex"
+        ? cli?.codex?.model
+        : provider === "gemini"
+          ? cli?.gemini?.model
+          : provider === "agent"
+            ? cli?.agent?.model
+            : provider === "openclaw"
+              ? cli?.openclaw?.model
+              : cli?.opencode?.model;
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
 
 function normalizeMessages(messages: Message[]): Message[] {
   return messages.map((message) => ({
@@ -105,6 +126,7 @@ export async function streamChatResponse({
   emitMeta: (patch: Partial<ChatSession["lastMeta"]>) => void;
 }) {
   const apiKeys = resolveApiKeys(env, configForCli);
+  const envState = resolveEnvState({ env, envForRun: env, configForCli });
   const context = buildContext({ pageUrl, pageTitle, pageContent, messages });
 
   const resolveModel = () => {
@@ -114,13 +136,28 @@ export async function streamChatResponse({
         return null;
       }
       if (requested.transport === "cli") {
+        const cliModel =
+          requested.cliModel ?? resolveConfiguredCliModel(requested.cliProvider, configForCli);
         return {
-          userModelId: requested.userModelId,
+          userModelId: cliModel
+            ? `cli/${requested.cliProvider}/${cliModel}`
+            : requested.userModelId,
           modelId: null,
           forceOpenRouter: false,
           transport: "cli" as const,
           cliProvider: requested.cliProvider,
-          cliModel: requested.cliModel,
+          cliModel,
+        };
+      }
+      if (requested.transport === "openrouter") {
+        return {
+          userModelId: requested.userModelId,
+          modelId: requested.llmModelId,
+          forceOpenRouter: requested.forceOpenRouter,
+          transport: "native" as const,
+          openaiApiKeyOverride: null,
+          openaiBaseUrlOverride: null,
+          forceChatCompletions: false,
         };
       }
       return {
@@ -128,6 +165,21 @@ export async function streamChatResponse({
         modelId: requested.llmModelId,
         forceOpenRouter: requested.forceOpenRouter,
         transport: "native" as const,
+        openaiApiKeyOverride:
+          requested.requiredEnv === "Z_AI_API_KEY"
+            ? envState.zaiApiKey
+            : requested.requiredEnv === "NVIDIA_API_KEY"
+              ? envState.nvidiaApiKey
+              : requested.requiredEnv === "GITHUB_TOKEN"
+                ? resolveGitHubModelsApiKey(env)
+                : null,
+        openaiBaseUrlOverride:
+          requested.requiredEnv === "Z_AI_API_KEY"
+            ? envState.zaiBaseUrl
+            : requested.requiredEnv === "NVIDIA_API_KEY"
+              ? envState.nvidiaBaseUrl
+              : (requested.openaiBaseUrlOverride ?? null),
+        forceChatCompletions: Boolean(requested.forceChatCompletions),
       };
     }
     return null;
@@ -156,11 +208,16 @@ export async function streamChatResponse({
     }
     const result = await streamTextWithContext({
       modelId: resolved.modelId!,
-      apiKeys,
+      apiKeys: {
+        ...apiKeys,
+        openaiApiKey: resolved.openaiApiKeyOverride ?? apiKeys.openaiApiKey,
+      },
       context,
       timeoutMs: 30_000,
       fetchImpl,
       forceOpenRouter: resolved.forceOpenRouter,
+      openaiBaseUrlOverride: resolved.openaiBaseUrlOverride,
+      forceChatCompletions: resolved.forceChatCompletions,
     });
     for await (const chunk of result.textStream) {
       pushToSession({ event: "content", data: chunk });
@@ -169,7 +226,6 @@ export async function streamChatResponse({
     return;
   }
 
-  const envState = resolveEnvState({ env, envForRun: env, configForCli });
   const attempts = buildAutoModelAttempts({
     kind: "text",
     promptTokens: null,

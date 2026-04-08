@@ -414,6 +414,104 @@ describe("YouTube transcript provider module", () => {
     expect(apify.fetchTranscriptWithApify).not.toHaveBeenCalled();
   });
 
+  it("falls through when youtubei captions look truncated for a long video", async () => {
+    api.extractYoutubeiTranscriptConfig.mockReturnValue({
+      apiKey: "KEY",
+      context: {},
+      params: "PARAMS",
+    });
+    api.fetchTranscriptFromTranscriptEndpoint.mockResolvedValue({
+      text: "short intro transcript only",
+      segments: null,
+    });
+    captions.extractYoutubeDurationSeconds.mockReturnValue(1_800);
+    ytdlp.fetchTranscriptWithYtDlp.mockResolvedValue({
+      text: "Recovered full transcript",
+      provider: "openai",
+      error: null,
+      notes: [],
+    });
+
+    const result = await fetchTranscript(
+      {
+        url: "https://www.youtube.com/watch?v=abcdefghijk",
+        html: "<html></html>",
+        resourceKey: null,
+      },
+      {
+        ...baseOptions,
+        youtubeTranscriptMode: "auto",
+        ytDlpPath: "/usr/bin/yt-dlp",
+        openaiApiKey: "OPENAI",
+      },
+    );
+
+    expect(result.text).toBe("Recovered full transcript");
+    expect(result.source).toBe("yt-dlp");
+    expect(result.attemptedProviders).toEqual(["youtubei", "captionTracks", "yt-dlp"]);
+    expect(result.notes).toContain("youtubei transcript appears truncated");
+  });
+
+  it("falls through when caption track text looks truncated for a long video", async () => {
+    captions.fetchTranscriptFromCaptionTracks.mockResolvedValue({
+      text: "tiny caption sample",
+      segments: null,
+    });
+    captions.extractYoutubeDurationSeconds.mockReturnValue(1_500);
+    ytdlp.fetchTranscriptWithYtDlp.mockResolvedValue({
+      text: "Recovered full transcript",
+      provider: "openai",
+      error: null,
+      notes: [],
+    });
+
+    const result = await fetchTranscript(
+      {
+        url: "https://www.youtube.com/watch?v=abcdefghijk",
+        html: "<html></html>",
+        resourceKey: null,
+      },
+      {
+        ...baseOptions,
+        youtubeTranscriptMode: "auto",
+        ytDlpPath: "/usr/bin/yt-dlp",
+        openaiApiKey: "OPENAI",
+      },
+    );
+
+    expect(result.text).toBe("Recovered full transcript");
+    expect(result.source).toBe("yt-dlp");
+    expect(result.attemptedProviders).toEqual(["captionTracks", "yt-dlp"]);
+    expect(result.notes).toContain("captionTracks transcript appears truncated");
+  });
+
+  it("returns unavailable with a note when yt-dlp finds no audio stream", async () => {
+    ytdlp.fetchTranscriptWithYtDlp.mockResolvedValue({
+      text: "",
+      provider: null,
+      error: null,
+      notes: ["yt-dlp: Media has no audio stream"],
+    });
+
+    const result = await fetchTranscript(
+      {
+        url: "https://www.youtube.com/watch?v=abcdefghijk",
+        html: "<html></html>",
+        resourceKey: null,
+      },
+      {
+        ...baseOptions,
+        youtubeTranscriptMode: "auto",
+        ytDlpPath: "/usr/bin/yt-dlp",
+        openaiApiKey: "OPENAI",
+      },
+    );
+
+    expect(result.text).toBeNull();
+    expect(result.source).toBe("unavailable");
+    expect(result.attemptedProviders).toEqual(["captionTracks", "yt-dlp", "unavailable"]);
+    expect(result.notes).toContain("yt-dlp: Media has no audio stream");
+  });
   it("returns segments when timestamps are requested", async () => {
     captions.fetchTranscriptFromCaptionTracks.mockResolvedValue({
       text: "Creator caption",

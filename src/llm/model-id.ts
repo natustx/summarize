@@ -1,4 +1,13 @@
-export type LlmProvider = "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+import { resolveGitHubCopilotBackendModelId } from "./github-models.js";
+
+export type LlmProvider =
+  | "xai"
+  | "openai"
+  | "google"
+  | "anthropic"
+  | "zai"
+  | "nvidia"
+  | "github-copilot";
 
 export type ParsedModelId = {
   provider: LlmProvider;
@@ -12,7 +21,15 @@ export type ParsedModelId = {
   canonical: string;
 };
 
-const PROVIDERS: LlmProvider[] = ["xai", "openai", "google", "anthropic", "zai", "nvidia"];
+const PROVIDERS: LlmProvider[] = [
+  "xai",
+  "openai",
+  "google",
+  "anthropic",
+  "zai",
+  "nvidia",
+  "github-copilot",
+];
 
 /**
  * Anthropic short model aliases that are NOT valid API model identifiers.
@@ -62,9 +79,16 @@ export function normalizeGatewayStyleModelId(raw: string): string {
 
   const provider = lower.slice(0, slash);
   const model = trimmed.slice(slash + 1);
+  if (provider === "github-copilot") {
+    const resolved = resolveGitHubCopilotBackendModelId(model);
+    if (resolved.trim().length === 0) {
+      throw new Error("Missing model id after provider prefix");
+    }
+    return `github-copilot/${resolved}`;
+  }
   if (!PROVIDERS.includes(provider as LlmProvider)) {
     throw new Error(
-      `Unsupported model provider "${provider}". Use xai/..., openai/..., google/..., anthropic/..., zai/..., or nvidia/...`,
+      `Unsupported model provider "${provider}". Use xai/..., openai/..., google/..., anthropic/..., zai/..., nvidia/..., or github-copilot/...`,
     );
   }
   if (model.trim().length === 0) {

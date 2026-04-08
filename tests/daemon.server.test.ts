@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { buildHealthPayload, corsHeaders, isTrustedOrigin } from "../src/daemon/server.js";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  buildHealthPayload,
+  corsHeaders,
+  isTrustedOrigin,
+  resolveDaemonListenHost,
+} from "../src/daemon/server.js";
 import { resolvePackageVersion } from "../src/version.js";
 
 describe("daemon/server health payload", () => {
@@ -88,5 +93,35 @@ describe("daemon/server CORS allowlist", () => {
       "access-control-max-age": "600",
       vary: "Origin",
     });
+  });
+});
+
+describe("daemon/server listen host", () => {
+  const originalPlatform = process.platform;
+
+  afterEach(() => {
+    Object.defineProperty(process, "platform", { value: originalPlatform });
+  });
+
+  it("binds to loopback by default", () => {
+    expect(resolveDaemonListenHost({})).toBe("127.0.0.1");
+  });
+
+  it("binds to all interfaces in Windows container mode", () => {
+    Object.defineProperty(process, "platform", { value: "win32" });
+    expect(
+      resolveDaemonListenHost({
+        CONTAINER_SANDBOX_MOUNT_POINT: "C:\\ContainerMappedDirectories",
+      }),
+    ).toBe("0.0.0.0");
+  });
+
+  it("keeps loopback on non-Windows hosts even with container markers", () => {
+    Object.defineProperty(process, "platform", { value: "linux" });
+    expect(
+      resolveDaemonListenHost({
+        RUNNING_IN_CONTAINER: "1",
+      }),
+    ).toBe("127.0.0.1");
   });
 });

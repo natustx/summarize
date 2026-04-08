@@ -6,8 +6,10 @@ import type { CliConfig, CliProvider } from "../config.js";
 import type { ExecFileFn } from "../markitdown.js";
 import { execCliWithInput } from "./cli-exec.js";
 import {
+  parseCodexOutputFromJsonl,
   isJsonCliProvider,
   parseCodexUsageFromJsonl,
+  parseOpenCodeOutputFromJsonl,
   parseJsonProviderOutput,
   type JsonCliProvider,
 } from "./cli-provider-output.js";
@@ -18,6 +20,8 @@ const DEFAULT_BINARIES: Record<CliProvider, string> = {
   codex: "codex",
   gemini: "gemini",
   agent: "agent",
+  openclaw: "openclaw",
+  opencode: "opencode",
 };
 
 const PROVIDER_PATH_ENV: Record<CliProvider, string> = {
@@ -25,6 +29,8 @@ const PROVIDER_PATH_ENV: Record<CliProvider, string> = {
   codex: "CODEX_PATH",
   gemini: "GEMINI_PATH",
   agent: "AGENT_PATH",
+  openclaw: "OPENCLAW_PATH",
+  opencode: "OPENCODE_PATH",
 };
 
 type RunCliModelOptions = {
@@ -57,7 +63,9 @@ function getCliProviderConfig(
   if (provider === "claude") return config.claude;
   if (provider === "codex") return config.codex;
   if (provider === "gemini") return config.gemini;
-  return config.agent;
+  if (provider === "agent") return config.agent;
+  if (provider === "openclaw") return config.openclaw;
+  return config.opencode;
 }
 
 export function isCliDisabled(
@@ -147,19 +155,86 @@ export async function runCliModel({
       : env;
 
   const providerConfig = getCliProviderConfig(provider, config);
-
+  const requestedModel = isNonEmptyString(model)
+    ? model.trim()
+    : isNonEmptyString(providerConfig?.model)
+      ? providerConfig.model.trim()
+      : null;
+  const providerExtraArgs: string[] = [];
   if (providerConfig?.extraArgs?.length) {
-    args.push(...providerConfig.extraArgs);
+    providerExtraArgs.push(...providerConfig.extraArgs);
   }
   if (extraArgs?.length) {
-    args.push(...extraArgs);
+    providerExtraArgs.push(...extraArgs);
   }
+  if (provider === "openclaw") {
+    const openclawArgs = [
+      ...providerExtraArgs,
+      "agent",
+      "--agent",
+      requestedModel ?? "main",
+      "-",
+      "--json",
+      "--timeout",
+      String(Math.max(1, Math.ceil(timeoutMs / 1000))),
+    ];
+    const { stdout } = await execCliWithInput({
+      execFileImpl: execFileFn,
+      cmd: binary,
+      args: openclawArgs,
+      input: prompt,
+      timeoutMs,
+      env: effectiveEnv,
+      cwd,
+    });
+    const parsed = JSON.parse(stdout);
+    const payloads = parsed?.result?.payloads;
+    const text = Array.isArray(payloads)
+      ? payloads
+          .map((p) => (typeof p?.text === "string" ? p.text : ""))
+          .filter(Boolean)
+          .join("\n\n")
+      : "";
+    if (!text.trim()) throw new Error("OpenClaw CLI returned empty output");
+    const usage =
+      parsed?.result?.meta?.agentMeta?.lastCallUsage ??
+      parsed?.result?.meta?.agentMeta?.usage ??
+      null;
+    return { text: text.trim(), usage, costUsd: null };
+  }
+
+  if (provider === "opencode") {
+    const isolatedCwd =
+      !allowTools && !cwd ? await fs.mkdtemp(path.join(tmpdir(), "summarize-opencode-")) : null;
+    try {
+      args.push("run", ...providerExtraArgs, "--format", "json");
+      if (requestedModel) {
+        args.push("--model", requestedModel);
+      }
+      const { stdout } = await execCliWithInput({
+        execFileImpl: execFileFn,
+        cmd: binary,
+        args,
+        input: prompt,
+        timeoutMs,
+        env: effectiveEnv,
+        cwd: isolatedCwd ?? cwd,
+      });
+      return parseOpenCodeOutputFromJsonl(stdout);
+    } finally {
+      if (isolatedCwd) {
+        await fs.rm(isolatedCwd, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+  }
+
   if (provider === "codex") {
     const outputDir = await fs.mkdtemp(path.join(tmpdir(), "summarize-codex-"));
     const outputPath = path.join(outputDir, "last-message.txt");
+    args.push(...providerExtraArgs);
     args.push("exec", "--output-last-message", outputPath, "--skip-git-repo-check", "--json");
-    if (model && model.trim().length > 0) {
-      args.push("-m", model.trim());
+    if (requestedModel) {
+      args.push("-m", requestedModel);
     }
     const hasVerbosityOverride = args.some((arg) => arg.includes("text.verbosity"));
     if (!hasVerbosityOverride) {
@@ -184,6 +259,13 @@ export async function runCliModel({
     if (fileText) {
       return { text: fileText, usage, costUsd };
     }
+    const parsedStdout = parseCodexOutputFromJsonl(stdout);
+    if (parsedStdout.text) {
+      return { text: parsedStdout.text, usage, costUsd };
+    }
+    if (parsedStdout.sawStructuredEvent) {
+      throw new Error("CLI returned empty output");
+    }
     const stdoutText = stdout.trim();
     if (stdoutText) {
       return { text: stdoutText, usage, costUsd };
@@ -194,7 +276,14 @@ export async function runCliModel({
   if (!isJsonCliProvider(provider)) {
     throw new Error(`Unsupported CLI provider "${provider}".`);
   }
-  const input = appendJsonProviderArgs({ provider, args, allowTools, model, prompt });
+  args.push(...providerExtraArgs);
+  const input = appendJsonProviderArgs({
+    provider,
+    args,
+    allowTools,
+    model: requestedModel,
+    prompt,
+  });
 
   const { stdout } = await execCliWithInput({
     execFileImpl: execFileFn,

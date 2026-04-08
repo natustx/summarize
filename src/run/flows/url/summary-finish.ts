@@ -32,12 +32,16 @@ export function pickModelForFinishLine(
     return null;
   };
 
-  return (
-    findLastModel("summary") ??
-    findLastModel("markdown") ??
-    (llmCalls.length > 0 ? (llmCalls[llmCalls.length - 1]?.model ?? null) : null) ??
-    fallback
-  );
+  const summaryModel = findLastModel("summary");
+  if (summaryModel) return summaryModel;
+
+  const markdownModel = findLastModel("markdown");
+  if (markdownModel) return markdownModel;
+
+  const lastCall = llmCalls.at(-1);
+  if (lastCall?.model) return lastCall.model;
+
+  return fallback;
 }
 
 export function buildModelMetaFromAttempt(attempt: ModelAttempt) {

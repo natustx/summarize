@@ -8,6 +8,7 @@ import {
   buildSummaryCacheKey,
 } from "../../../cache.js";
 import type { ExtractedLinkContent } from "../../../content/index.js";
+import { resolveGitHubModelsApiKey } from "../../../llm/github-models.js";
 import type { Prompt } from "../../../llm/prompt.js";
 import { buildAutoModelAttempts } from "../../../model-auto.js";
 import { SUMMARY_SYSTEM_PROMPT } from "../../../prompts/index.js";
@@ -151,7 +152,13 @@ export async function resolveUrlSummaryExecution({
               openaiBaseUrlOverride: model.apiStatus.nvidiaBaseUrl,
               forceChatCompletions: true,
             }
-          : {};
+          : model.fixedModelSpec.requiredEnv === "GITHUB_TOKEN"
+            ? {
+                openaiApiKeyOverride: resolveGitHubModelsApiKey(io.envForRun),
+                openaiBaseUrlOverride: model.fixedModelSpec.openaiBaseUrlOverride ?? null,
+                forceChatCompletions: true,
+              }
+            : {};
     return [
       {
         transport: model.fixedModelSpec.transport === "openrouter" ? "openrouter" : "native",

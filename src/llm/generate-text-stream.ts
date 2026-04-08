@@ -4,6 +4,7 @@ import { createUnsupportedFunctionalityError } from "./errors.js";
 import { resolveEffectiveTemperature, streamUsageWithTimeout } from "./generate-text-shared.js";
 import type { LlmApiKeys } from "./generate-text.js";
 import { parseGatewayStyleModelId } from "./model-id.js";
+import type { LlmProvider } from "./model-id.js";
 import {
   resolveOpenAiCompatibleClientConfigForProvider,
   supportsStreaming,
@@ -15,6 +16,7 @@ import {
   resolveOpenAiModel,
   resolveXaiModel,
 } from "./providers/models.js";
+import { completeOpenAiText } from "./providers/openai.js";
 import type { OpenAiClientConfig } from "./providers/types.js";
 import type { LlmTokenUsage } from "./types.js";
 
@@ -37,7 +39,7 @@ export type StreamTextWithContextArgs = {
 export type StreamTextResult = {
   textStream: AsyncIterable<string>;
   canonicalModelId: string;
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   usage: Promise<LlmTokenUsage | null>;
   lastError: () => unknown;
 };
@@ -278,7 +280,12 @@ export async function streamTextWithContext({
       };
     }
 
-    if (parsed.provider === "openai" || parsed.provider === "zai" || parsed.provider === "nvidia") {
+    if (
+      parsed.provider === "openai" ||
+      parsed.provider === "zai" ||
+      parsed.provider === "nvidia" ||
+      parsed.provider === "github-copilot"
+    ) {
       const openaiConfig: OpenAiClientConfig = resolveOpenAiCompatibleClientConfigForProvider({
         provider: parsed.provider,
         openaiApiKey: apiKeys.openaiApiKey,
@@ -287,6 +294,35 @@ export async function streamTextWithContext({
         openaiBaseUrlOverride,
         forceChatCompletions,
       });
+      if (parsed.provider === "github-copilot") {
+        const result = await completeOpenAiText({
+          modelId: parsed.model,
+          openaiConfig,
+          context,
+          temperature: effectiveTemperature,
+          maxOutputTokens,
+          signal: controller.signal,
+          fetchImpl,
+        });
+        return {
+          textStream: createTimedTextStream({
+            textStream: {
+              async *[Symbol.asyncIterator]() {
+                yield result.text;
+              },
+            },
+            timeoutMs,
+            controller,
+            setLastError,
+          }),
+          canonicalModelId: result.resolvedModelId
+            ? `${parsed.provider}/${result.resolvedModelId}`
+            : parsed.canonical,
+          provider: parsed.provider,
+          usage: Promise.resolve(result.usage),
+          lastError: () => lastError,
+        };
+      }
       const model = resolveOpenAiModel({ modelId: parsed.model, context, openaiConfig });
       const stream = streamSimple(model, context, {
         ...(typeof effectiveTemperature === "number" ? { temperature: effectiveTemperature } : {}),

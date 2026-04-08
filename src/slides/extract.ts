@@ -1,8 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { ExtractedLinkContent, MediaCache } from "../content/index.js";
-import { extractYouTubeVideoId, isDirectMediaUrl, isYouTubeUrl } from "../content/index.js";
-import { resolveExecutableInPath } from "../run/env.js";
+import type { MediaCache } from "../content/index.js";
+import { canSpawnCommand, resolveExecutableInPath } from "../run/env.js";
 import {
   buildSlidesMediaCacheKey,
   downloadRemoteVideo,
@@ -37,7 +36,7 @@ import {
   selectTimestampTargets,
 } from "./scene-detection.js";
 import type { SlideSettings } from "./settings.js";
-import { buildDirectSourceId, buildYoutubeSourceId } from "./source-id.js";
+import { resolveSlideSource, resolveSlideSourceFromUrl } from "./source.js";
 import {
   buildSlidesDirId,
   readSlidesCacheIfValid,
@@ -118,6 +117,27 @@ function resolveToolPath(
   return resolveExecutableInPath(binary, env);
 }
 
+async function resolveRunnableTool({
+  binary,
+  env,
+  explicitEnvKey,
+  probeArgs,
+}: {
+  binary: string;
+  env: Record<string, string | undefined>;
+  explicitEnvKey?: string;
+  probeArgs: string[];
+}): Promise<string | null> {
+  const explicit =
+    explicitEnvKey && typeof env[explicitEnvKey] === "string" ? env[explicitEnvKey]?.trim() : "";
+  if (explicit) {
+    return (await canSpawnCommand({ command: explicit, args: probeArgs, env })) ? explicit : null;
+  }
+  const resolved = resolveToolPath(binary, env, explicitEnvKey);
+  if (resolved) return resolved;
+  return (await canSpawnCommand({ command: binary, args: probeArgs, env })) ? binary : null;
+}
+
 type ExtractSlidesArgs = {
   source: SlideSource;
   settings: SlideSettings;
@@ -145,81 +165,6 @@ type ExtractSlidesArgs = {
     onSlidesLog?: ((message: string) => void) | null;
   } | null;
 };
-
-export function resolveSlideSource({
-  url,
-  extracted,
-}: {
-  url: string;
-  extracted: ExtractedLinkContent;
-}): SlideSource | null {
-  const directUrl = extracted.video?.url ?? extracted.url;
-  const youtubeCandidate =
-    extractYouTubeVideoId(extracted.video?.url ?? "") ??
-    extractYouTubeVideoId(extracted.url) ??
-    extractYouTubeVideoId(url);
-  if (youtubeCandidate) {
-    return {
-      url: `https://www.youtube.com/watch?v=${youtubeCandidate}`,
-      kind: "youtube",
-      sourceId: buildYoutubeSourceId(youtubeCandidate),
-    };
-  }
-
-  if (extracted.video?.kind === "direct" || isDirectMediaUrl(directUrl) || isDirectMediaUrl(url)) {
-    const normalized = directUrl || url;
-    return {
-      url: normalized,
-      kind: "direct",
-      sourceId: buildDirectSourceId(normalized),
-    };
-  }
-
-  if (isYouTubeUrl(url)) {
-    const fallbackId = extractYouTubeVideoId(url);
-    if (fallbackId) {
-      return {
-        url: `https://www.youtube.com/watch?v=${fallbackId}`,
-        kind: "youtube",
-        sourceId: buildYoutubeSourceId(fallbackId),
-      };
-    }
-  }
-
-  return null;
-}
-
-export function resolveSlideSourceFromUrl(url: string): SlideSource | null {
-  const youtubeCandidate = extractYouTubeVideoId(url);
-  if (youtubeCandidate) {
-    return {
-      url: `https://www.youtube.com/watch?v=${youtubeCandidate}`,
-      kind: "youtube",
-      sourceId: buildYoutubeSourceId(youtubeCandidate),
-    };
-  }
-
-  if (isDirectMediaUrl(url)) {
-    return {
-      url,
-      kind: "direct",
-      sourceId: buildDirectSourceId(url),
-    };
-  }
-
-  if (isYouTubeUrl(url)) {
-    const fallbackId = extractYouTubeVideoId(url);
-    if (fallbackId) {
-      return {
-        url: `https://www.youtube.com/watch?v=${fallbackId}`,
-        kind: "youtube",
-        sourceId: buildYoutubeSourceId(fallbackId),
-      };
-    }
-  }
-
-  return null;
-}
 
 export async function extractSlidesForSource({
   source,
@@ -271,14 +216,31 @@ export async function extractSlidesForSource({
         `pipeline=ingest(sequential)->scene-detect(parallel:${workers})->extract-frames(parallel:${workers})->ocr(parallel:${workers})`,
       );
 
-      const ffmpegBinary = ffmpegPath ?? resolveToolPath("ffmpeg", env, "FFMPEG_PATH");
+      const ffmpegBinary =
+        ffmpegPath ??
+        (await resolveRunnableTool({
+          binary: "ffmpeg",
+          env,
+          explicitEnvKey: "FFMPEG_PATH",
+          probeArgs: ["-version"],
+        }));
       if (!ffmpegBinary) {
         throw new Error("Missing ffmpeg (install ffmpeg or add it to PATH).");
       }
-      const ffprobeBinary = resolveToolPath("ffprobe", env, "FFPROBE_PATH");
+      const ffprobeBinary = await resolveRunnableTool({
+        binary: "ffprobe",
+        env,
+        explicitEnvKey: "FFPROBE_PATH",
+        probeArgs: ["-version"],
+      });
 
       if (settings.ocr && !tesseractPath) {
-        const resolved = resolveToolPath("tesseract", env, "TESSERACT_PATH");
+        const resolved = await resolveRunnableTool({
+          binary: "tesseract",
+          env,
+          explicitEnvKey: "TESSERACT_PATH",
+          probeArgs: ["--version"],
+        });
         if (!resolved) {
           throw new Error("Missing tesseract OCR (install tesseract or skip --slides-ocr).");
         }
@@ -286,7 +248,13 @@ export async function extractSlidesForSource({
       }
       const ocrEnabled = Boolean(settings.ocr && tesseractPath);
       const ocrAvailable = Boolean(
-        tesseractPath ?? resolveToolPath("tesseract", env, "TESSERACT_PATH"),
+        tesseractPath ??
+        (await resolveRunnableTool({
+          binary: "tesseract",
+          env,
+          explicitEnvKey: "TESSERACT_PATH",
+          probeArgs: ["--version"],
+        })),
       );
 
       {
@@ -296,6 +264,15 @@ export async function extractSlidesForSource({
       }
       reportSlidesProgress?.("preparing source", SLIDES_PROGRESS.PREPARE);
 
+      const ytDlpBinary =
+        ytDlpPath ??
+        (await resolveRunnableTool({
+          binary: "yt-dlp",
+          env,
+          explicitEnvKey: "YT_DLP_PATH",
+          probeArgs: ["--version"],
+        }));
+
       const {
         inputPath,
         inputCleanup,
@@ -304,7 +281,7 @@ export async function extractSlidesForSource({
         source,
         mediaCache,
         timeoutMs,
-        ytDlpPath,
+        ytDlpPath: ytDlpBinary,
         ytDlpCookiesFromBrowser,
         resolveSlidesYtDlpExtractFormat: () => resolveSlidesYtDlpExtractFormat(env),
         resolveSlidesStreamFallback: () => resolveSlidesStreamFallback(env),

@@ -3,4 +3,5 @@ export type OpenAiClientConfig = {
   baseURL?: string;
   useChatCompletions: boolean;
   isOpenRouter: boolean;
+  extraHeaders?: Record<string, string>;
 };

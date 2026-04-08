@@ -1,6 +1,6 @@
 export type AutoRuleKind = "text" | "website" | "youtube" | "image" | "video" | "file";
 export type VideoMode = "auto" | "transcript" | "understand";
-export type CliProvider = "claude" | "codex" | "gemini" | "agent";
+export type CliProvider = "claude" | "codex" | "gemini" | "agent" | "openclaw" | "opencode";
 export type CliProviderConfig = {
   binary?: string;
   extraArgs?: string[];
@@ -18,6 +18,8 @@ export type CliConfig = {
   codex?: CliProviderConfig;
   gemini?: CliProviderConfig;
   agent?: CliProviderConfig;
+  openclaw?: CliProviderConfig;
+  opencode?: CliProviderConfig;
   autoFallback?: CliAutoFallbackConfig;
   magicAuto?: CliAutoFallbackConfig;
   promptOverride?: string;
@@ -213,6 +215,12 @@ export type SummarizeConfig = {
      * - otherwise: translate the output into the requested language
      */
     language?: string;
+    /**
+     * Default summary length (same values as `--length`).
+     *
+     * Examples: "short", "long", "xl", "20k".
+     */
+    length?: string;
   };
   ui?: {
     /**

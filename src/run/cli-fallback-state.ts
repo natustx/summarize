@@ -11,7 +11,14 @@ function resolveStatePath(env: Record<string, string | undefined>): string | nul
 }
 
 function parseCliProvider(value: unknown): CliProvider | null {
-  if (value === "claude" || value === "codex" || value === "gemini" || value === "agent") {
+  if (
+    value === "claude" ||
+    value === "codex" ||
+    value === "gemini" ||
+    value === "agent" ||
+    value === "openclaw" ||
+    value === "opencode"
+  ) {
     return value;
   }
   return null;

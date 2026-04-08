@@ -58,16 +58,16 @@ describe("config loading", () => {
     });
   });
 
-  it("supports output.language", () => {
+  it("supports output.language and output.length", () => {
     const { root } = writeJsonConfig({
       model: { id: "openai/gpt-5-mini" },
-      output: { language: "de" },
+      output: { language: "de", length: "long" },
     });
 
     const result = loadSummarizeConfig({ env: { HOME: root } });
     expect(result.config).toEqual({
       model: { id: "openai/gpt-5-mini" },
-      output: { language: "de" },
+      output: { language: "de", length: "long" },
     });
   });
 
@@ -496,6 +496,21 @@ describe("config loading", () => {
   it("rejects invalid cli enabled providers", () => {
     const { root } = writeJsonConfig({ cli: { enabled: ["nope"] } });
     expect(() => loadSummarizeConfig({ env: { HOME: root } })).toThrow(/unknown CLI provider/);
+  });
+
+  it("parses openclaw cli config", () => {
+    const { root } = writeJsonConfig({
+      cli: {
+        enabled: ["openclaw"],
+        openclaw: { binary: "/usr/local/bin/openclaw", model: "main" },
+      },
+    });
+    expect(loadSummarizeConfig({ env: { HOME: root } }).config).toEqual({
+      cli: {
+        enabled: ["openclaw"],
+        openclaw: { binary: "/usr/local/bin/openclaw", model: "main" },
+      },
+    });
   });
 
   it("rejects cli disabled and provider enabled flags", () => {

@@ -29,6 +29,12 @@ For output language:
 2. Config file `output.language` (preferred) or `language` (legacy)
 3. Built-in default (`auto` = match source content language)
 
+For output length:
+
+1. CLI flag `--length`
+2. Config file `output.length`
+3. Built-in default (`xl`)
+
 See `docs/language.md` for supported values.
 
 For prompt:
@@ -58,11 +64,17 @@ For UI theme:
 {
   "model": { "id": "google/gemini-3-flash" },
   "env": { "OPENAI_API_KEY": "sk-..." },
-  "output": { "language": "auto" },
+  "output": { "language": "auto", "length": "long" },
   "prompt": "Explain like I am five.",
   "ui": { "theme": "ember" }
 }
 ```
+
+`output.length` accepts the same values as `--length`:
+
+- Presets: `short`, `medium`, `long`, `xl`, `xxl`
+- Shorthand: `s`, `m`, `l`
+- Character targets: `1500`, `20k`, `20000`
 
 Shorthand (equivalent):
 
@@ -316,15 +328,17 @@ Examples:
 ```json
 {
   "cli": {
-    "enabled": ["gemini", "agent"],
+    "enabled": ["gemini", "agent", "openclaw", "opencode"],
     "autoFallback": {
       "enabled": true,
       "onlyWhenNoApiKeys": true,
-      "order": ["claude", "gemini", "codex", "agent"]
+      "order": ["claude", "gemini", "codex", "agent", "openclaw", "opencode"]
     },
     "codex": { "model": "gpt-5.2" },
     "claude": { "binary": "/usr/local/bin/claude", "extraArgs": ["--verbose"] },
-    "agent": { "binary": "/usr/local/bin/agent", "model": "gpt-5.2" }
+    "agent": { "binary": "/usr/local/bin/agent", "model": "gpt-5.2" },
+    "openclaw": { "binary": "/usr/local/bin/openclaw", "model": "main" },
+    "opencode": { "binary": "/usr/local/bin/opencode", "model": "openai/gpt-5.4" }
   }
 }
 ```
@@ -333,7 +347,7 @@ Notes:
 
 - `cli.enabled` is an allowlist (and order) for auto + explicit CLI model ids.
 - `cli.autoFallback` controls implicit-auto CLI fallback when `cli.enabled` is not set.
-- Default auto fallback order: `claude, gemini, codex, agent`.
+- Default auto fallback order: `claude, gemini, codex, agent, openclaw, opencode`.
 - Auto fallback stores the last successful provider in `~/.summarize/cli-state.json` and prioritizes it on the next run.
 - `cli.<provider>.binary` overrides CLI binary discovery.
 - `cli.<provider>.extraArgs` appends extra CLI args.

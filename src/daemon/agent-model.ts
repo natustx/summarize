@@ -1,5 +1,6 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
 import { getModel } from "@mariozechner/pi-ai";
+import { isOpenRouterBaseUrl } from "@steipete/summarize-core";
 import { createSyntheticModel } from "../llm/providers/shared.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
 import { parseCliUserModelId } from "../run/env.js";
@@ -39,25 +40,72 @@ function parseProviderModelId(modelId: string): { provider: string; model: strin
   };
 }
 
-function overrideModelBaseUrl(model: Model<Api>, baseUrl: string | null) {
-  if (!baseUrl) return model;
-  return { ...model, baseUrl };
+function isCustomOpenAiBaseUrl(baseUrl: string | null): boolean {
+  if (!baseUrl) return false;
+  try {
+    return new URL(baseUrl).host !== "api.openai.com";
+  } catch {
+    return false;
+  }
+}
+
+function overrideModelGatewaySettings({
+  provider,
+  model,
+  baseUrl,
+  forceOpenAiChatCompletions,
+}: {
+  provider: string;
+  model: Model<Api>;
+  baseUrl: string | null;
+  forceOpenAiChatCompletions: boolean;
+}) {
+  const nextModel = baseUrl ? ({ ...model, baseUrl } as Model<Api>) : model;
+  if (provider !== "openai") return nextModel;
+  const effectiveBaseUrl =
+    typeof nextModel.baseUrl === "string" && nextModel.baseUrl.trim().length > 0
+      ? nextModel.baseUrl.trim()
+      : null;
+  const shouldUseChatCompletions =
+    forceOpenAiChatCompletions ||
+    isCustomOpenAiBaseUrl(effectiveBaseUrl) ||
+    (effectiveBaseUrl !== null && isOpenRouterBaseUrl(effectiveBaseUrl));
+  if (!shouldUseChatCompletions) return nextModel;
+  const headers =
+    effectiveBaseUrl !== null && isOpenRouterBaseUrl(effectiveBaseUrl)
+      ? {
+          ...((nextModel as Model<Api> & { headers?: Record<string, string> }).headers ?? {}),
+          "HTTP-Referer": "https://github.com/steipete/summarize",
+          "X-Title": "summarize",
+        }
+      : (nextModel as Model<Api> & { headers?: Record<string, string> }).headers;
+  return {
+    ...nextModel,
+    api: "openai-completions",
+    ...(headers ? { headers } : {}),
+  } as Model<Api>;
 }
 
 function resolveModelWithFallback({
   provider,
   modelId,
   baseUrl,
+  forceOpenAiChatCompletions,
 }: {
   provider: string;
   modelId: string;
   baseUrl: string | null;
+  forceOpenAiChatCompletions: boolean;
 }): Model<Api> {
   try {
-    return overrideModelBaseUrl(
-      getModel(provider as never, modelId as never) as Model<Api>,
+    const model = getModel(provider as never, modelId as never);
+    if (!model) throw new Error(`Model not found: ${provider}/${modelId}`);
+    return overrideModelGatewaySettings({
+      provider,
+      model: model as Model<Api>,
       baseUrl,
-    );
+      forceOpenAiChatCompletions,
+    });
   } catch (error) {
     if (baseUrl) {
       return createSyntheticModel({
@@ -133,6 +181,8 @@ function buildNoAgentModelAvailableError({
     codex?: boolean;
     gemini?: boolean;
     agent?: boolean;
+    openclaw?: boolean;
+    opencode?: boolean;
   };
 }): Error {
   const checked = attempts.map((attempt) => attempt.userModelId);
@@ -152,7 +202,9 @@ function buildNoAgentModelAvailableError({
           if (attempt.requiredEnv === "CLI_CLAUDE") return "claude";
           if (attempt.requiredEnv === "CLI_CODEX") return "codex";
           if (attempt.requiredEnv === "CLI_GEMINI") return "gemini";
-          return "agent";
+          if (attempt.requiredEnv === "CLI_AGENT") return "agent";
+          if (attempt.requiredEnv === "CLI_OPENCLAW") return "openclaw";
+          return "opencode";
         })
         .filter((provider) => !cliAvailability[provider as keyof typeof cliAvailability]),
     ),
@@ -196,6 +248,7 @@ export async function resolveAgentModel({
     nvidiaBaseUrl,
     envForAuto,
     cliAvailability,
+    openaiUseChatCompletions,
   } = resolveRunContextState({
     env,
     envForRun: env,
@@ -241,7 +294,12 @@ export async function resolveAgentModel({
     const providerForPiAi = provider === "nvidia" ? "openai" : provider;
     return {
       provider,
-      model: resolveModelWithFallback({ provider: providerForPiAi, modelId, baseUrl }),
+      model: resolveModelWithFallback({
+        provider: providerForPiAi,
+        modelId,
+        baseUrl,
+        forceOpenAiChatCompletions: provider === "openai" && openaiUseChatCompletions,
+      }),
     };
   };
 

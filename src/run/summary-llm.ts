@@ -1,5 +1,6 @@
 import { generateTextWithModelId } from "../llm/generate-text.js";
 import { resolveGoogleModelForUsage } from "../llm/google-models.js";
+import type { LlmProvider } from "../llm/model-id.js";
 import type { parseGatewayStyleModelId } from "../llm/model-id.js";
 import type { Prompt } from "../llm/prompt.js";
 
@@ -84,7 +85,7 @@ export async function summarizeWithModelId({
   }) => void;
 }): Promise<{
   text: string;
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia";
+  provider: LlmProvider;
   canonicalModelId: string;
   usage: Awaited<ReturnType<typeof generateTextWithModelId>>["usage"];
 }> {

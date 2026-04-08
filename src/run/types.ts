@@ -1,4 +1,5 @@
 import type { CliProvider } from "../config.js";
+import type { LlmProvider } from "../llm/model-id.js";
 
 export type ModelAttemptRequiredEnv =
   | "XAI_API_KEY"
@@ -8,10 +9,13 @@ export type ModelAttemptRequiredEnv =
   | "ANTHROPIC_API_KEY"
   | "OPENROUTER_API_KEY"
   | "Z_AI_API_KEY"
+  | "GITHUB_TOKEN"
   | "CLI_CLAUDE"
   | "CLI_CODEX"
   | "CLI_GEMINI"
-  | "CLI_AGENT";
+  | "CLI_AGENT"
+  | "CLI_OPENCLAW"
+  | "CLI_OPENCODE";
 
 export type ModelAttempt = {
   transport: "native" | "openrouter" | "cli";
@@ -28,7 +32,7 @@ export type ModelAttempt = {
 };
 
 export type ModelMeta = {
-  provider: "xai" | "openai" | "google" | "anthropic" | "zai" | "nvidia" | "cli";
+  provider: LlmProvider | "cli";
   canonical: string;
 };
 
