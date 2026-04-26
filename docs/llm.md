@@ -42,6 +42,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `--model <model>`
   - Examples:
     - `cli/codex/gpt-5.2`
+    - `gpt-fast` (built-in Codex GPT-5.5 Fast preset; alias: `fast`)
     - `cli/claude/sonnet`
     - `cli/gemini/flash`
     - `cli/agent/auto`
@@ -65,7 +66,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `--model auto`
   - See `docs/model-auto.md`
 - `--model <preset>`
-  - Uses a config-defined preset (see `docs/config.md` → “Presets”).
+  - Uses a built-in or config-defined preset (see `docs/config.md` → “Presets”).
 - `--prompt <text>` / `--prompt-file <path>`
   - Overrides the built-in summary instructions (prompt becomes the instruction prefix).
   - Prompts are wrapped in `<instructions>`, `<context>`, `<content>` tags.

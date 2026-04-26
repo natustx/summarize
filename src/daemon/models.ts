@@ -169,7 +169,10 @@ export async function buildModelPickerOptions({
   providers.cliOpenclaw = Boolean(cliAvailability.openclaw);
   providers.cliOpencode = Boolean(cliAvailability.opencode);
 
-  const options: ModelPickerOption[] = [{ id: "auto", label: "Auto" }];
+  const options: ModelPickerOption[] = [
+    { id: "auto", label: "Auto" },
+    { id: "gpt-fast", label: "GPT Fast (Codex)" },
+  ];
 
   if (providers.cliClaude) {
     options.push({ id: "cli/claude", label: "CLI: Claude" });

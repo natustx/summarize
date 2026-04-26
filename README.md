@@ -294,7 +294,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 
 - `--model <provider/model>`: which model to use (defaults to `auto`)
 - `--model auto`: automatic model selection + fallback (default)
-- `--model <name>`: use a config-defined model (see Configuration)
+- `--model <name>`: use a built-in or config-defined preset (see Configuration)
 - `--timeout <duration>`: `30s`, `2m`, `5000ms` (default `2m`)
 - `--retries <count>`: LLM retry attempts on timeout (default `1`)
 - `--length short|medium|long|xl|xxl|s|m|l|<chars>`
@@ -331,6 +331,10 @@ Summarize can use common coding CLIs as local model backends:
 - `agent` (Cursor Agent CLI) -> `--cli agent` / `--model cli/agent/<model>`
 - `openclaw` -> `--cli openclaw` / `--model cli/openclaw/<model>` or `--model openclaw/<model>`
 - `opencode` -> `--cli opencode` / `--model cli/opencode/<model>` (`--model cli/opencode` uses the OpenCode runtime default)
+
+Built-in preset:
+
+- `--model gpt-fast` (alias: `fast`) runs Codex with GPT-5.5 and `service_tier="fast"`; requires `codex login` and uses Codex fast-tier quota/cost.
 
 Requirements:
 
@@ -550,7 +554,7 @@ Also supported:
 
 - `model: { "mode": "auto" }` (automatic model selection + fallback; see [docs/model-auto.md](docs/model-auto.md))
 - `model.rules` (customize candidates / ordering)
-- `models` (define presets selectable via `--model <preset>`)
+- `models` (define presets selectable via `--model <preset>`; overrides built-ins like `free` or `gpt-fast`)
 - `env` (generic env var defaults; process env still wins)
 - `apiKeys` (legacy shortcut, mapped to env names; prefer `env` for new configs)
 - `output.length` (default `--length`: `short|medium|long|xl|xxl|20k`)
@@ -626,6 +630,7 @@ OpenRouter (OpenAI-compatible):
 - Set `OPENROUTER_API_KEY=...`
 - Prefer forcing OpenRouter per model id: `--model openrouter/<author>/<slug>`
 - Built-in preset: `--model free` (uses a default set of OpenRouter `:free` models)
+- Built-in Codex preset: `--model gpt-fast` / `--model fast` (GPT-5.5 Fast mode via Codex CLI)
 
 ### `summarize refresh-free`
 

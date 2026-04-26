@@ -234,7 +234,7 @@ Define presets you can select via `--model <preset>`:
 ```json
 {
   "models": {
-    "fast": { "id": "openai/gpt-5-mini" },
+    "small": { "id": "openai/gpt-5-mini" },
     "or-free": {
       "rules": [
         {
@@ -253,12 +253,13 @@ Notes:
 
 - `auto` is reserved and can’t be defined as a preset.
 - `free` is built-in (OpenRouter `:free` candidates). Override it by defining `models.free` in your config, or regenerate it via `summarize refresh-free`.
+- `gpt-fast` and `fast` are built-in Codex GPT-5.5 Fast presets. Override them by defining `models.gpt-fast` or `models.fast` in your config.
 
 Use a preset as your default `model`:
 
 ```json
 {
-  "model": "fast"
+  "model": "small"
 }
 ```
 

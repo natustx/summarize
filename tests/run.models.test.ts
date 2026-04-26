@@ -2,6 +2,48 @@ import { describe, expect, it } from "vitest";
 import { resolveModelSelection } from "../src/run/run-models.js";
 
 describe("run model selection", () => {
+  it("resolves built-in GPT fast presets", () => {
+    for (const name of ["gpt-fast", "fast"]) {
+      const result = resolveModelSelection({
+        config: null,
+        configForCli: null,
+        configPath: null,
+        envForRun: {},
+        explicitModelArg: name,
+      });
+
+      expect(result.isNamedModelSelection).toBe(true);
+      expect(result.requestedModelInput).toBe(name);
+      expect(result.requestedModelLabel).toBe(name);
+      expect(result.requestedModel.kind).toBe("fixed");
+      if (result.requestedModel.kind === "fixed") {
+        expect(result.requestedModel.userModelId).toBe("cli/codex/gpt-fast");
+        expect(result.requestedModel.transport).toBe("cli");
+        expect(result.requestedModel.llmModelId).toBeNull();
+        expect(result.requestedModel.requiredEnv).toBe("CLI_CODEX");
+        if (result.requestedModel.transport === "cli") {
+          expect(result.requestedModel.cliProvider).toBe("codex");
+          expect(result.requestedModel.cliModel).toBe("gpt-fast");
+        }
+      }
+    }
+  });
+
+  it("lets config override the built-in GPT fast preset", () => {
+    const result = resolveModelSelection({
+      config: { models: { "gpt-fast": { id: "openai/gpt-5-nano" } } },
+      configForCli: { models: { "gpt-fast": { id: "openai/gpt-5-nano" } } },
+      configPath: null,
+      envForRun: {},
+      explicitModelArg: "gpt-fast",
+    });
+
+    expect(result.requestedModel.kind).toBe("fixed");
+    if (result.requestedModel.kind === "fixed") {
+      expect(result.requestedModel.userModelId).toBe("openai/gpt-5-nano");
+    }
+  });
+
   it("resolves provider-default OpenCode ids through summarize config", () => {
     const config = {
       cli: {

@@ -5,9 +5,9 @@ import type { LlmApiKeys } from "../llm/generate-text.js";
 import { streamTextWithContext } from "../llm/generate-text.js";
 import { resolveGitHubModelsApiKey } from "../llm/github-models.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
-import { parseRequestedModelId } from "../model-spec.js";
 import { parseBooleanEnv, parseCliUserModelId } from "../run/env.js";
 import { resolveEnvState } from "../run/run-env.js";
+import { resolveModelSelection } from "../run/run-models.js";
 
 type ChatSession = {
   id: string;
@@ -144,7 +144,13 @@ export async function streamChatResponse({
 
   const resolveModel = () => {
     if (modelOverride && modelOverride.trim().length > 0) {
-      const requested = parseRequestedModelId(modelOverride);
+      const { requestedModel: requested } = resolveModelSelection({
+        config: configForCli ?? null,
+        configForCli: configForCli ?? null,
+        configPath: null,
+        envForRun: env,
+        explicitModelArg: modelOverride,
+      });
       if (requested.kind === "auto") {
         return null;
       }

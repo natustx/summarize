@@ -25,6 +25,8 @@ const DEFAULT_BINARIES: Record<CliProvider, string> = {
 };
 
 const OPENCLAW_MAX_MESSAGE_ARG_BYTES = 120 * 1024;
+const CODEX_GPT_FAST_MODEL = "gpt-5.5";
+const CODEX_GPT_FAST_ALIASES = new Set(["gpt-fast", "gpt-5.5-fast"]);
 
 const PROVIDER_PATH_ENV: Record<CliProvider, string> = {
   claude: "CLAUDE_PATH",
@@ -91,6 +93,31 @@ export function resolveCliBinary(
   const envKey = `SUMMARIZE_CLI_${provider.toUpperCase()}`;
   if (isNonEmptyString(env[envKey])) return env[envKey].trim();
   return DEFAULT_BINARIES[provider];
+}
+
+function hasCodexConfigOverride(args: string[], key: string): boolean {
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] !== "-c" && args[i] !== "--config") continue;
+    const next = args[i + 1] ?? "";
+    if (next.trim().startsWith(`${key}=`)) return true;
+  }
+  return false;
+}
+
+function resolveCodexModelAndArgs(
+  requestedModel: string | null,
+  providerExtraArgs: string[],
+): { model: string | null; extraArgs: string[] } {
+  const normalized = requestedModel?.trim().toLowerCase() ?? "";
+  if (!CODEX_GPT_FAST_ALIASES.has(normalized)) {
+    return { model: requestedModel, extraArgs: providerExtraArgs };
+  }
+
+  const extraArgs = [...providerExtraArgs];
+  if (!hasCodexConfigOverride(extraArgs, "service_tier")) {
+    extraArgs.push("-c", 'service_tier="fast"');
+  }
+  return { model: CODEX_GPT_FAST_MODEL, extraArgs };
 }
 
 function appendJsonProviderArgs({
@@ -239,12 +266,16 @@ export async function runCliModel({
   }
 
   if (provider === "codex") {
+    const { model: codexModel, extraArgs: codexExtraArgs } = resolveCodexModelAndArgs(
+      requestedModel,
+      providerExtraArgs,
+    );
     const outputDir = await fs.mkdtemp(path.join(tmpdir(), "summarize-codex-"));
     const outputPath = path.join(outputDir, "last-message.txt");
-    args.push(...providerExtraArgs);
+    args.push(...codexExtraArgs);
     args.push("exec", "--output-last-message", outputPath, "--skip-git-repo-check", "--json");
-    if (requestedModel) {
-      args.push("-m", requestedModel);
+    if (codexModel) {
+      args.push("-m", codexModel);
     }
     const hasVerbosityOverride = args.some((arg) => arg.includes("text.verbosity"));
     if (!hasVerbosityOverride) {

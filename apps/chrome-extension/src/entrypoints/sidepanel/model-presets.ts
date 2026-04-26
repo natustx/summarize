@@ -42,6 +42,7 @@ export function createModelPresetsController({
     modelPresetEl.innerHTML = "";
     for (const { value, label } of [
       { value: "auto", label: "Auto" },
+      { value: "gpt-fast", label: "GPT Fast" },
       { value: "free", label: "Free" },
       { value: "custom", label: "Custom…" },
     ]) {
@@ -56,7 +57,7 @@ export function createModelPresetsController({
     providers?: unknown;
     localModelsSource?: unknown;
   }) => {
-    const hints: string[] = ["auto"];
+    const hints: string[] = ["auto", "gpt-fast"];
     const providers = discovery.providers;
     if (providers && typeof providers === "object") {
       const record = providers as Record<string, unknown>;

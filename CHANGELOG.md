@@ -2,6 +2,12 @@
 
 ## 0.14.0 - UNRELEASED
 
+## 0.13.2 - 2026-04-26
+
+### Features
+
+- Models: add built-in `gpt-fast` / `fast` presets that run Codex with GPT-5.5 Fast mode via `service_tier="fast"`, including daemon and Chrome extension model pickers.
+
 ## 0.13.1 - 2026-04-22
 
 ### Fixes

@@ -10,6 +10,8 @@ Use OpenAI directly by choosing an `openai/...` model id.
 
 For the full model/provider matrix, see `docs/llm.md`.
 
+Note: GPT Fast mode is a Codex fast-tier preset, not an `openai/...` model id. Use `--model gpt-fast` to run it through Codex CLI.
+
 ## Env
 
 - `OPENAI_API_KEY` (required for `openai/...` models)

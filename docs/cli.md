@@ -22,6 +22,12 @@ Summarize can use installed CLIs (Claude, Codex, Gemini, Cursor Agent, OpenClaw,
 Use `--cli [provider]` (case-insensitive) for the provider default, or `--model cli/<provider>/<model>` to pin a model.
 If `--cli` is provided without a provider, auto selection is used with CLI enabled.
 
+Codex GPT Fast:
+
+- `--model gpt-fast` (alias: `fast`) maps to `cli/codex/gpt-fast`.
+- Summarize runs Codex with model `gpt-5.5` and `service_tier="fast"`.
+- Requires `codex login` and consumes Codex fast-tier quota/cost.
+
 ## Auto mode
 
 Auto mode can prepend CLI attempts in two ways:
