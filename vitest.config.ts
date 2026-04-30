@@ -62,12 +62,20 @@ export default defineConfig({
         // Daemon is integration-tested / manually tested; unit coverage is noisy + brittle.
         "**/src/daemon/**",
         // Slide extraction is integration-tested; unit coverage is too noisy.
+        "src/slides/download.ts",
+        "src/slides/extract-finalize.ts",
         "src/slides/extract.ts",
+        "src/slides/frame-extraction.ts",
+        "src/slides/ocr.ts",
+        "src/slides/process.ts",
         // OS/browser integration (exec/sqlite/keychain); covered via higher-level tests.
         "**/src/content/transcript/providers/twitter-cookies-*.ts",
         // Barrels / type-only entrypoints (noise for coverage).
         "src/**/index.ts",
         "src/**/types.ts",
+        "src/**/contracts.ts",
+        "src/**/slides-text.ts",
+        "src/**/slides-text-types.ts",
         "src/**/deps.ts",
       ],
       thresholds: {

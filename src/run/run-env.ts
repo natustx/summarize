@@ -8,7 +8,7 @@ export type EnvState = {
   openrouterConfigured: boolean;
   groqApiKey: string | null;
   assemblyaiApiKey: string | null;
-  openaiTranscriptionKey: string | null;
+  openaiApiKey: string | null;
   xaiApiKey: string | null;
   googleApiKey: string | null;
   anthropicApiKey: string | null;
@@ -151,12 +151,14 @@ export function resolveEnvState({
     }
     return null;
   })();
-  const openaiTranscriptionKey = openaiKeyRaw?.trim() ?? null;
+  const openaiApiKey = openaiKeyRaw?.trim() ?? null;
   const googleConfigured = typeof googleApiKey === "string" && googleApiKey.length > 0;
   const anthropicConfigured = typeof anthropicApiKey === "string" && anthropicApiKey.length > 0;
   const openrouterConfigured = typeof openrouterApiKey === "string" && openrouterApiKey.length > 0;
   const cliAvailability = resolveCliAvailability({ env, config: configForCli });
-  const envForAuto = openrouterApiKey ? { ...env, OPENROUTER_API_KEY: openrouterApiKey } : env;
+  const envForAuto = openrouterApiKey
+    ? { ...envForRun, OPENROUTER_API_KEY: openrouterApiKey }
+    : envForRun;
   const providerBaseUrls = {
     openai: openaiBaseUrl,
     nvidia: nvidiaBaseUrl,
@@ -171,7 +173,7 @@ export function resolveEnvState({
     openrouterConfigured,
     groqApiKey,
     assemblyaiApiKey,
-    openaiTranscriptionKey,
+    openaiApiKey,
     xaiApiKey,
     googleApiKey,
     anthropicApiKey,

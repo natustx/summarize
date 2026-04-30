@@ -19,16 +19,16 @@
   "dependencies": {
     "@mozilla/readability": "0.6.0",
     "@steipete/summarize-core": "workspace:*",
-    "@zag-js/checkbox": "^1.39.1",
-    "@zag-js/preact": "^1.39.1",
-    "@zag-js/select": "^1.39.1",
+    "@zag-js/checkbox": "^1.40.0",
+    "@zag-js/preact": "^1.40.0",
+    "@zag-js/select": "^1.40.0",
     "markdown-it": "^14.1.1",
     "preact": "10.29.1"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",
-    "@types/chrome": "^0.1.39",
-    "typescript": "^6.0.2",
-    "wxt": "0.20.20"
+    "@types/chrome": "^0.1.40",
+    "typescript": "^6.0.3",
+    "wxt": "0.20.25"
   }
 }

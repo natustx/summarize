@@ -204,6 +204,151 @@ describe("podcast provider extra branches (spotify/apple/transcribe)", () => {
     expect(result.metadata?.kind).toBe("spotify_itunes_rss_enclosure");
   });
 
+  it("Spotify: falls back to iTunes RSS when embed audio transcription throws", async () => {
+    const { fetchTranscript, transcribeMediaWithWhisper } = await importPodcastProvider();
+    transcribeMediaWithWhisper.mockRejectedValueOnce(new Error("ffmpeg failed (69)"));
+
+    const episodeId = "abc123";
+    const pageUrl = `https://open.spotify.com/episode/${episodeId}`;
+    const embedUrl = `https://open.spotify.com/embed/episode/${episodeId}`;
+    const embedAudioUrl = "https://scdn.example.com/drm-preview.mp4";
+    const feedUrl = "https://example.com/feed.xml";
+    const enclosureUrl = "https://example.com/ep.mp3";
+
+    const embedHtml = `<!doctype html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+      {
+        props: {
+          pageProps: {
+            state: {
+              data: {
+                entity: { subtitle: "Show", title: "Ep", duration: 60_000 },
+                defaultAudioFileObject: { url: [embedAudioUrl] },
+              },
+            },
+          },
+        },
+      },
+    )}</script>`;
+    const rss = `<rss><channel><item><title>Ep</title><enclosure url="${enclosureUrl}" type="audio/mpeg"/></item></channel></rss>`;
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = (init?.method ?? "GET").toUpperCase();
+
+      if (url === embedUrl && method === "GET") return new Response(embedHtml, { status: 200 });
+
+      if (url.startsWith("https://itunes.apple.com/search") && method === "GET") {
+        return new Response(JSON.stringify({ results: [{ collectionName: "Show", feedUrl }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (url === feedUrl && method === "GET") return new Response(rss, { status: 200 });
+
+      if ((url === embedAudioUrl || url === enclosureUrl) && method === "HEAD") {
+        return new Response(null, {
+          status: 200,
+          headers: { "content-type": "audio/mpeg", "content-length": "10" },
+        });
+      }
+
+      if ((url === embedAudioUrl || url === enclosureUrl) && method === "GET") {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "audio/mpeg" },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    const result = await fetchTranscript(
+      { url: pageUrl, html: null, resourceKey: null },
+      { ...baseOptions, fetch: fetchImpl as unknown as typeof fetch, scrapeWithFirecrawl: null },
+    );
+
+    expect(result.source).toBe("whisper");
+    expect(result.metadata?.kind).toBe("spotify_itunes_rss_enclosure");
+    expect(transcribeMediaWithWhisper).toHaveBeenCalledTimes(2);
+    expect(result.notes).toContain("falling back to iTunes RSS: ffmpeg failed");
+  });
+
+  it("Spotify: skips encrypted CBCS embed audio and falls back to iTunes RSS", async () => {
+    const { fetchTranscript, transcribeMediaWithWhisper } = await importPodcastProvider();
+    const episodeId = "abc123";
+    const pageUrl = `https://open.spotify.com/episode/${episodeId}`;
+    const embedUrl = `https://open.spotify.com/embed/episode/${episodeId}`;
+    const encryptedEmbedAudioUrl = "https://audio4-fa.scdn.co/audio/encrypted";
+    const feedUrl = "https://example.com/feed.xml";
+    const enclosureUrl = "https://example.com/ep.mp3";
+
+    const embedHtml = `<!doctype html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify(
+      {
+        props: {
+          pageProps: {
+            state: {
+              data: {
+                entity: { subtitle: "Show", title: "Ep", duration: 60_000 },
+                defaultAudioFileObject: {
+                  format: "MP4_128_CBCS",
+                  url: [encryptedEmbedAudioUrl],
+                },
+              },
+            },
+          },
+        },
+      },
+    )}</script>`;
+    const rss = `<rss><channel><item><title>Ep</title><enclosure url="${enclosureUrl}" type="audio/mpeg"/></item></channel></rss>`;
+
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = (init?.method ?? "GET").toUpperCase();
+
+      if (url === embedUrl && method === "GET") return new Response(embedHtml, { status: 200 });
+
+      if (url.startsWith("https://itunes.apple.com/search") && method === "GET") {
+        return new Response(JSON.stringify({ results: [{ collectionName: "Show", feedUrl }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (url === feedUrl && method === "GET") return new Response(rss, { status: 200 });
+
+      if (url === enclosureUrl && method === "HEAD") {
+        return new Response(null, {
+          status: 200,
+          headers: { "content-type": "audio/mpeg", "content-length": "10" },
+        });
+      }
+
+      if (url === enclosureUrl && method === "GET") {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "audio/mpeg" },
+        });
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    const result = await fetchTranscript(
+      { url: pageUrl, html: null, resourceKey: null },
+      { ...baseOptions, fetch: fetchImpl as unknown as typeof fetch, scrapeWithFirecrawl: null },
+    );
+
+    expect(result.source).toBe("whisper");
+    expect(result.metadata?.kind).toBe("spotify_itunes_rss_enclosure");
+    expect(result.metadata?.enclosureUrl).toBe(enclosureUrl);
+    expect(transcribeMediaWithWhisper).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).not.toHaveBeenCalledWith(encryptedEmbedAudioUrl, expect.anything());
+    expect(result.notes).toContain("format MP4_128_CBCS looks encrypted");
+  });
+
   it("Apple: picks newest episode when i= is missing", async () => {
     const { fetchTranscript } = await importPodcastProvider();
     const showId = "1794526548";

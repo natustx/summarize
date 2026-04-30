@@ -279,6 +279,37 @@ Examples:
 Note: some models/providers do not support streaming or certain file media types. When that happens, the CLI prints a friendly error (or auto-disables streaming for that model when supported by the provider).
 `gpt-5.4-mini` and `gpt-5.4-nano` are treated as real model ids; the same shorthand also works under `github-copilot/...`.
 
+### OpenAI fast mode and thinking
+
+Fast mode is a request option, not a model id:
+
+```bash
+summarize "https://example.com" --model openai/gpt-5.5 --fast --thinking medium
+summarize "https://example.com" --model openai/gpt-5.4 --service-tier fast --thinking low
+```
+
+- `--fast` is shorthand for `--service-tier fast`.
+- `--service-tier default|fast|priority|flex` controls OpenAI service tier. `fast` is the summarize/Codex-facing spelling and is sent to OpenAI as `service_tier="priority"`.
+- `--thinking none|low|medium|high|xhigh` controls OpenAI reasoning effort. Aliases: `off` → `none`, `min` → `low`, `mid` / `med` → `medium`, `x-high` / `extra-high` → `xhigh`.
+- `--service-tier default` clears a configured tier for one run.
+
+Config equivalent:
+
+```json
+{
+  "model": "openai/gpt-5.5",
+  "openai": {
+    "serviceTier": "fast",
+    "thinking": "medium"
+  }
+}
+```
+
+Compatibility aliases still work, but prefer the explicit flags above:
+
+- `--model gpt-fast` / `--model fast` → `openai/gpt-5.5` + fast tier + medium thinking
+- `--model openai/gpt-5.5-fast` → `openai/gpt-5.5` + fast tier
+
 ### Limits
 
 - Text inputs over 10 MB are rejected before tokenization.
@@ -294,7 +325,7 @@ Use `summarize --help` or `summarize help` for the full help text.
 
 - `--model <provider/model>`: which model to use (defaults to `auto`)
 - `--model auto`: automatic model selection + fallback (default)
-- `--model <name>`: use a config-defined model (see Configuration)
+- `--model <name>`: use a built-in or config-defined preset (see Configuration)
 - `--timeout <duration>`: `30s`, `2m`, `5000ms` (default `2m`)
 - `--retries <count>`: LLM retry attempts on timeout (default `1`)
 - `--length short|medium|long|xl|xxl|s|m|l|<chars>`
@@ -331,6 +362,10 @@ Summarize can use common coding CLIs as local model backends:
 - `agent` (Cursor Agent CLI) -> `--cli agent` / `--model cli/agent/<model>`
 - `openclaw` -> `--cli openclaw` / `--model cli/openclaw/<model>` or `--model openclaw/<model>`
 - `opencode` -> `--cli opencode` / `--model cli/opencode/<model>` (`--model cli/opencode` uses the OpenCode runtime default)
+
+Built-in preset:
+
+- `--model codex-fast` runs Codex with GPT-5.5 Fast mode and requires `codex login`.
 
 Requirements:
 
@@ -550,7 +585,7 @@ Also supported:
 
 - `model: { "mode": "auto" }` (automatic model selection + fallback; see [docs/model-auto.md](docs/model-auto.md))
 - `model.rules` (customize candidates / ordering)
-- `models` (define presets selectable via `--model <preset>`)
+- `models` (define presets selectable via `--model <preset>`; overrides built-ins like `free`)
 - `env` (generic env var defaults; process env still wins)
 - `apiKeys` (legacy shortcut, mapped to env names; prefer `env` for new configs)
 - `output.length` (default `--length`: `short|medium|long|xl|xxl|20k`)
@@ -559,6 +594,9 @@ Also supported:
 - `slides.enabled` / `slides.max` / `slides.ocr` / `slides.dir` (defaults for `--slides`)
 - `ui.theme: "aurora"|"ember"|"moss"|"mono"`
 - `openai.useChatCompletions: true` (force OpenAI-compatible chat completions)
+- `openai.serviceTier: "fast"|"priority"|"flex"` (use `"fast"` for the friendly alias)
+- `openai.thinking` / `openai.reasoningEffort: "none"|"low"|"medium"|"high"|"xhigh"`
+- `openai.textVerbosity: "low"|"medium"|"high"`
 
 Note: the config is parsed leniently (JSON5), but comments are not allowed. Unknown keys are ignored.
 

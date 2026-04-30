@@ -2,7 +2,8 @@ import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { DAEMON_WINDOWS_TASK_NAME } from "./constants.js";
+import { readDaemonConfig } from "./config.js";
+import { DAEMON_HOST, DAEMON_WINDOWS_TASK_NAME } from "./constants.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,10 +20,100 @@ function resolveTaskScriptPath(env: Record<string, string | undefined>): string 
 
 function resolveTaskLauncherPath(env: Record<string, string | undefined>): string {
   const home = resolveHomeDir(env);
+  return path.join(home, ".summarize", "daemon-launch.vbs");
+}
+
+function resolveTaskDefinitionPath(env: Record<string, string | undefined>): string {
+  const home = resolveHomeDir(env);
+  return path.join(home, ".summarize", "daemon-task.xml");
+}
+
+function resolveCurrentUserPrincipal(env: Record<string, string | undefined>): string {
+  const username = env.USERNAME?.trim();
+  if (!username) throw new Error("Missing USERNAME");
+  const domain = env.USERDOMAIN?.trim() || env.COMPUTERNAME?.trim();
+  return domain ? `${domain}\\${username}` : username;
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildScheduledTaskXml({
+  launcherPath,
+  userPrincipal,
+}: {
+  launcherPath: string;
+  userPrincipal: string;
+}): string {
+  const userId = escapeXml(userPrincipal);
+  const args = escapeXml(`//B //Nologo "${launcherPath}"`);
+  // schtasks /Create /SC ONLOGON defaults DisallowStartIfOnBatteries and
+  // StopIfGoingOnBatteries to true. On a laptop unplugged at install time the
+  // task silently no-ops every /Run with Last Result 0, which is what made the
+  // daemon look like it was failing to start. Register via /XML so we can flip
+  // those flags off and own every other relevant setting too.
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
+    "  <RegistrationInfo>",
+    "    <Author>summarize</Author>",
+    "  </RegistrationInfo>",
+    "  <Triggers>",
+    "    <LogonTrigger>",
+    "      <Enabled>true</Enabled>",
+    `      <UserId>${userId}</UserId>`,
+    "    </LogonTrigger>",
+    "  </Triggers>",
+    "  <Principals>",
+    '    <Principal id="Author">',
+    `      <UserId>${userId}</UserId>`,
+    "      <LogonType>InteractiveToken</LogonType>",
+    "      <RunLevel>LeastPrivilege</RunLevel>",
+    "    </Principal>",
+    "  </Principals>",
+    "  <Settings>",
+    "    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>",
+    "    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+    "    <AllowHardTerminate>true</AllowHardTerminate>",
+    "    <StartWhenAvailable>true</StartWhenAvailable>",
+    "    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>",
+    "    <IdleSettings>",
+    "      <StopOnIdleEnd>false</StopOnIdleEnd>",
+    "      <RestartOnIdle>false</RestartOnIdle>",
+    "    </IdleSettings>",
+    "    <AllowStartOnDemand>true</AllowStartOnDemand>",
+    "    <Enabled>true</Enabled>",
+    "    <Hidden>true</Hidden>",
+    "    <RunOnlyIfIdle>false</RunOnlyIfIdle>",
+    "    <WakeToRun>false</WakeToRun>",
+    "    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>",
+    "    <Priority>7</Priority>",
+    "  </Settings>",
+    '  <Actions Context="Author">',
+    "    <Exec>",
+    "      <Command>wscript.exe</Command>",
+    `      <Arguments>${args}</Arguments>`,
+    "    </Exec>",
+    "  </Actions>",
+    "</Task>",
+    "",
+  ].join("\r\n");
+}
+
+function resolveLegacyLauncherPath(env: Record<string, string | undefined>): string {
+  // The pre-XML installer wrote a different VBS at this path. Removed in
+  // favor of daemon-launch.vbs; we still clean it up on upgrade.
+  const home = resolveHomeDir(env);
   return path.join(home, ".summarize", "daemon-run.vbs");
 }
 
-function resolveTaskPidPath(env: Record<string, string | undefined>): string {
+function resolveLegacyPidPath(env: Record<string, string | undefined>): string {
   const home = resolveHomeDir(env);
   return path.join(home, ".summarize", "daemon.pid");
 }
@@ -32,27 +123,19 @@ function quoteCmdArg(value: string): string {
   return `"${value.replace(/"/g, '\\"')}"`;
 }
 
-function quoteVbsString(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
 function parseCommandLine(value: string): string[] {
   const args: string[] = [];
   let current = "";
   let inQuotes = false;
-  let escapeNext = false;
 
-  for (const char of value) {
-    if (escapeNext) {
-      current += char;
-      escapeNext = false;
-      continue;
-    }
-    if (char === "\\") {
-      escapeNext = true;
-      continue;
-    }
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i];
     if (char === '"') {
+      if (inQuotes && value[i + 1] === '"') {
+        current += '"';
+        i += 1;
+        continue;
+      }
       inQuotes = !inQuotes;
       continue;
     }
@@ -115,48 +198,29 @@ function buildTaskScript({
   return `${lines.join("\r\n")}\r\n`;
 }
 
-function buildTaskLauncherScript({
-  scriptPath,
-  pidPath,
+function quoteVbsString(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function buildLauncherVbs({
+  programArguments,
+  workingDirectory,
 }: {
-  scriptPath: string;
-  pidPath: string;
+  programArguments: string[];
+  workingDirectory?: string;
 }): string {
-  const escapedScriptPath = quoteVbsString(scriptPath);
-  const escapedPidPath = quoteVbsString(pidPath);
-  return [
-    'Set fso = CreateObject("Scripting.FileSystemObject")',
-    'Set processStartup = GetObject("winmgmts:root\\\\cimv2:Win32_ProcessStartup").SpawnInstance_',
-    "processStartup.ShowWindow = 0",
-    `scriptPath = ${escapedScriptPath}`,
-    `pidPath = ${escapedPidPath}`,
-    'command = "cmd.exe /d /c " & Chr(34) & scriptPath & Chr(34)',
-    "processId = 0",
-    'result = GetObject("winmgmts:root\\\\cimv2:Win32_Process").Create(command, Null, processStartup, processId)',
-    "If result <> 0 Then",
-    "  WScript.Quit result",
-    "End If",
-    "Set pidFile = fso.OpenTextFile(pidPath, 2, True)",
-    "pidFile.Write CStr(processId)",
-    "pidFile.Close",
-    "Do While ProcessExists(processId)",
-    "  WScript.Sleep 1000",
-    "Loop",
-    "If fso.FileExists(pidPath) Then",
-    "  Set currentPidFile = fso.OpenTextFile(pidPath, 1, False)",
-    "  currentPid = Trim(currentPidFile.ReadAll)",
-    "  currentPidFile.Close",
-    "  If currentPid = CStr(processId) Then",
-    "    fso.DeleteFile pidPath, True",
-    "  End If",
-    "End If",
-    "",
-    "Function ProcessExists(pid)",
-    '  Set processes = GetObject("winmgmts:root\\\\cimv2").ExecQuery("SELECT ProcessId FROM Win32_Process WHERE ProcessId = " & pid)',
-    "  ProcessExists = (processes.Count > 0)",
-    "End Function",
-    "",
-  ].join("\r\n");
+  // Run the daemon via wscript + WshShell.Run with windowStyle=0 so node is
+  // started with CREATE_NO_WINDOW. wscript itself is a Windows-subsystem app,
+  // so it never allocates a console. Net effect: zero windows, zero conhost,
+  // even on a logged-in interactive session.
+  const command = programArguments.map(quoteCmdArg).join(" ");
+  const lines = ['Set sh = CreateObject("WScript.Shell")'];
+  if (workingDirectory) {
+    lines.push(`sh.CurrentDirectory = ${quoteVbsString(workingDirectory)}`);
+  }
+  lines.push(`sh.Run ${quoteVbsString(command)}, 0, False`);
+  lines.push("");
+  return lines.join("\r\n");
 }
 
 async function execWindowsCommand(
@@ -192,6 +256,42 @@ async function execTaskkill(
   return execWindowsCommand("taskkill", args);
 }
 
+function isMissingProcessError(detail: string): boolean {
+  return /not found|not running|no running instance|does not exist/i.test(detail);
+}
+
+async function fetchDaemonPid(env: Record<string, string | undefined>): Promise<number | null> {
+  const cfg = await readDaemonConfig({ env });
+  if (!cfg) return null;
+  const url = `http://${DAEMON_HOST}:${cfg.port}/health`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1000);
+  try {
+    const res = await fetch(url, { method: "GET", signal: controller.signal });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { pid?: unknown };
+    const pid = typeof body.pid === "number" ? body.pid : null;
+    return pid && Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// schtasks /End only targets the task action process. Our wscript launcher
+// exits after detaching node, so /End cannot stop the daemon itself. Ask the
+// daemon for its own pid via /health and taskkill the tree before /End.
+async function killRunningDaemon(env: Record<string, string | undefined>): Promise<void> {
+  const pid = await fetchDaemonPid(env);
+  if (pid === null) return;
+  const res = await execTaskkill(["/PID", `${pid}`, "/T", "/F"]);
+  const detail = (res.stderr || res.stdout).trim();
+  if (res.code !== 0 && !isMissingProcessError(detail)) {
+    throw new Error(`taskkill failed: ${detail || "unknown error"}`.trim());
+  }
+}
+
 async function assertSchtasksAvailable() {
   const res = await execSchtasks(["/Query"]);
   if (res.code === 0) return;
@@ -199,32 +299,12 @@ async function assertSchtasksAvailable() {
   throw new Error(`schtasks unavailable: ${detail || "unknown error"}`.trim());
 }
 
-function isMissingProcessError(detail: string): boolean {
-  return /not found|not running|no running instance|does not exist/i.test(detail);
-}
-
-async function stopTrackedTaskProcessTree(env: Record<string, string | undefined>): Promise<void> {
-  const pidPath = resolveTaskPidPath(env);
-  let pid = "";
-  try {
-    pid = (await fs.readFile(pidPath, "utf8")).trim();
-  } catch {
-    return;
-  }
-
-  const pidNumber = Number(pid);
-  if (!Number.isInteger(pidNumber) || pidNumber <= 0) {
-    await fs.unlink(pidPath).catch(() => {});
-    return;
-  }
-
-  const res = await execTaskkill(["/PID", `${pidNumber}`, "/T", "/F"]);
-  const detail = (res.stderr || res.stdout).trim();
-  if (res.code !== 0 && !isMissingProcessError(detail)) {
-    throw new Error(`taskkill failed: ${detail || "unknown error"}`.trim());
-  }
-
-  await fs.unlink(pidPath).catch(() => {});
+async function removeLegacyPidArtifact(env: Record<string, string | undefined>): Promise<void> {
+  // Earlier versions tracked a PID file alongside the launcher. The launcher
+  // path moved to daemon-launch.vbs and PID tracking is gone — clean up
+  // both leftovers from upgraded installs.
+  await fs.unlink(resolveLegacyLauncherPath(env)).catch(() => {});
+  await fs.unlink(resolveLegacyPidPath(env)).catch(() => {});
 }
 
 export async function installScheduledTask({
@@ -241,32 +321,38 @@ export async function installScheduledTask({
   await assertSchtasksAvailable();
   const scriptPath = resolveTaskScriptPath(env);
   const launcherPath = resolveTaskLauncherPath(env);
-  const pidPath = resolveTaskPidPath(env);
+  const xmlPath = resolveTaskDefinitionPath(env);
   await fs.mkdir(path.dirname(scriptPath), { recursive: true });
   const script = buildTaskScript({ programArguments, workingDirectory });
   await fs.writeFile(scriptPath, script, "utf8");
-  await fs.unlink(pidPath).catch(() => {});
-  const launcher = buildTaskLauncherScript({ scriptPath, pidPath });
+  const launcher = buildLauncherVbs({ programArguments, workingDirectory });
   await fs.writeFile(launcherPath, launcher, "utf8");
+  await removeLegacyPidArtifact(env);
 
-  const quotedLauncher = quoteCmdArg(launcherPath);
+  const userPrincipal = resolveCurrentUserPrincipal(env);
+  const xml = buildScheduledTaskXml({ launcherPath, userPrincipal });
+  await fs.writeFile(xmlPath, xml, "utf8");
+
   const create = await execSchtasks([
     "/Create",
     "/F",
-    "/SC",
-    "ONLOGON",
-    "/RL",
-    "LIMITED",
     "/TN",
     DAEMON_WINDOWS_TASK_NAME,
-    "/TR",
-    quotedLauncher,
+    "/XML",
+    xmlPath,
   ]);
   if (create.code !== 0) {
-    throw new Error(`schtasks create failed: ${create.stderr || create.stdout}`.trim());
+    const detail = (create.stderr || create.stdout).trim();
+    const hint = /access is denied/i.test(detail)
+      ? " (run `summarize daemon install` from an elevated PowerShell/cmd — schtasks /Create /XML requires Administrator)"
+      : "";
+    throw new Error(`schtasks create failed: ${detail}${hint}`);
   }
 
-  await execSchtasks(["/Run", "/TN", DAEMON_WINDOWS_TASK_NAME]);
+  const run = await execSchtasks(["/Run", "/TN", DAEMON_WINDOWS_TASK_NAME]);
+  if (run.code !== 0) {
+    throw new Error(`schtasks run failed: ${run.stderr || run.stdout}`.trim());
+  }
   stdout.write(`Installed Scheduled Task: ${DAEMON_WINDOWS_TASK_NAME}\n`);
   stdout.write(`Task script: ${scriptPath}\n`);
   return { scriptPath };
@@ -280,26 +366,20 @@ export async function uninstallScheduledTask({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   await assertSchtasksAvailable();
-  await stopTrackedTaskProcessTree(env);
+  await killRunningDaemon(env);
   await execSchtasks(["/End", "/TN", DAEMON_WINDOWS_TASK_NAME]);
   await execSchtasks(["/Delete", "/F", "/TN", DAEMON_WINDOWS_TASK_NAME]);
 
   const scriptPath = resolveTaskScriptPath(env);
-  const launcherPath = resolveTaskLauncherPath(env);
-  const pidPath = resolveTaskPidPath(env);
   try {
     await fs.unlink(scriptPath);
     stdout.write(`Removed task script: ${scriptPath}\n`);
   } catch {
     stdout.write(`Task script not found at ${scriptPath}\n`);
   }
-  try {
-    await fs.unlink(launcherPath);
-    stdout.write(`Removed task launcher: ${launcherPath}\n`);
-  } catch {
-    stdout.write(`Task launcher not found at ${launcherPath}\n`);
-  }
-  await fs.unlink(pidPath).catch(() => {});
+  await fs.unlink(resolveTaskLauncherPath(env)).catch(() => {});
+  await fs.unlink(resolveTaskDefinitionPath(env)).catch(() => {});
+  await removeLegacyPidArtifact(env);
 }
 
 export async function restartScheduledTask({
@@ -310,7 +390,7 @@ export async function restartScheduledTask({
   stdout: NodeJS.WritableStream;
 }): Promise<void> {
   await assertSchtasksAvailable();
-  await stopTrackedTaskProcessTree(env);
+  await killRunningDaemon(env);
   await execSchtasks(["/End", "/TN", DAEMON_WINDOWS_TASK_NAME]);
   const res = await execSchtasks(["/Run", "/TN", DAEMON_WINDOWS_TASK_NAME]);
   if (res.code !== 0) {

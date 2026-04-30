@@ -42,9 +42,11 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `--model <model>`
   - Examples:
     - `cli/codex/gpt-5.2`
+    - `openai/gpt-5.5`
+    - `codex-fast` (explicit Codex CLI GPT Fast preset)
     - `cli/claude/sonnet`
-    - `cli/gemini/gemini-3-flash`
-    - `cli/agent/gpt-5.2`
+    - `cli/gemini/flash`
+    - `cli/agent/auto`
     - `cli/openclaw/main`
     - `cli/opencode/openai/gpt-5.4`
     - `openai/gpt-5.4`
@@ -65,7 +67,7 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
 - `--model auto`
   - See `docs/model-auto.md`
 - `--model <preset>`
-  - Uses a config-defined preset (see `docs/config.md` → “Presets”).
+  - Uses a built-in or config-defined preset (see `docs/config.md` → “Presets”).
 - `--prompt <text>` / `--prompt-file <path>`
   - Overrides the built-in summary instructions (prompt becomes the instruction prefix).
   - Prompts are wrapped in `<instructions>`, `<context>`, `<content>` tags.
@@ -91,6 +93,13 @@ installed, auto mode can use local CLI models via `cli.enabled` or implicit auto
   - If omitted, no max token parameter is sent (provider default).
   - Minimum numeric value: 16.
   - Recommendation: prefer `--length` unless you need a hard cap (some providers count “reasoning” into the cap).
+- `--thinking none|low|medium|high|xhigh`
+  - Sets OpenAI reasoning effort for `openai/...` GPT-5-family models.
+  - Short aliases: `off`, `min` (low), `mid` / `med`, `x-high`, `extra-high`.
+- `--fast`
+  - Shorthand for `--service-tier fast` on OpenAI models.
+- `--service-tier default|fast|priority|flex`
+  - OpenAI service tier override. `fast` is the summarize-facing alias for OpenAI `priority`; `default` sends no service tier.
 - `--retries <count>`
   - LLM retry attempts on timeout (default: 1).
 - `--json` (includes prompt + summary in one JSON object)

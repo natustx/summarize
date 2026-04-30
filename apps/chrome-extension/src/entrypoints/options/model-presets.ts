@@ -15,6 +15,10 @@ export function createModelPresetsController({
     auto.value = "auto";
     auto.textContent = "Auto";
     presetEl.append(auto);
+    const gptFast = document.createElement("option");
+    gptFast.value = "gpt-fast";
+    gptFast.textContent = "GPT Fast";
+    presetEl.append(gptFast);
     const custom = document.createElement("option");
     custom.value = "custom";
     custom.textContent = "Custom…";
@@ -25,7 +29,7 @@ export function createModelPresetsController({
     providers?: unknown;
     localModelsSource?: unknown;
   }) => {
-    const hints: string[] = ["auto"];
+    const hints: string[] = ["auto", "gpt-fast"];
     const providers = discovery.providers;
     if (providers && typeof providers === "object") {
       const p = providers as Record<string, unknown>;

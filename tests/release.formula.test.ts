@@ -29,12 +29,12 @@ end
     const output = updateFormulaForMacArtifacts(input, urls);
 
     expect(output).toContain("on_macos do");
-    expect(output).toContain("on_linux do");
+    expect(output).toContain(`# ${LINUX_HOMEBREW_MESSAGE}`);
+    expect(output).toContain("depends_on :macos");
     expect(output).toContain(`url "${urls.urlArm}"`);
     expect(output).toContain(`sha256 "${urls.shaArm}"`);
     expect(output).toContain(`url "${urls.urlX64}"`);
     expect(output).toContain(`sha256 "${urls.shaX64}"`);
-    expect(output).toContain(`odie "${LINUX_HOMEBREW_MESSAGE}"`);
     expect(output).not.toContain("old-arm");
     expect(output).not.toContain("old-x64");
   });
@@ -54,7 +54,8 @@ end
     expect(output).toContain("on_macos do");
     expect(output).toContain("on_arm do");
     expect(output).toContain("on_intel do");
-    expect(output).toContain("on_linux do");
+    expect(output).toContain(`# ${LINUX_HOMEBREW_MESSAGE}`);
+    expect(output).toContain("depends_on :macos");
     expect(output).toContain(`url "${urls.urlArm}"`);
     expect(output).toContain(`sha256 "${urls.shaArm}"`);
     expect(output).toContain(`url "${urls.urlX64}"`);
@@ -72,11 +73,11 @@ end
     const output = updateFormulaForMacArtifacts(input, urls);
 
     expect(output).toContain("on_macos do");
-    expect(output).toContain("on_linux do");
+    expect(output).toContain(`# ${LINUX_HOMEBREW_MESSAGE}`);
+    expect(output).toContain("depends_on :macos");
     expect(output).toContain(`url "${urls.urlArm}"`);
     expect(output).toContain(`sha256 "${urls.shaArm}"`);
     expect(output).toContain(`url "${urls.urlX64}"`);
     expect(output).toContain(`sha256 "${urls.shaX64}"`);
-    expect(output).toContain(`odie "${LINUX_HOMEBREW_MESSAGE}"`);
   });
 });

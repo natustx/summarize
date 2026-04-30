@@ -10,6 +10,8 @@ import {
 } from "../src/run/bird.js";
 import { BIRD_TIP } from "../src/run/constants.js";
 
+const TEST_CLI_TIMEOUT_MS = 10_000;
+
 const makeCliScript = (binary: "bird" | "xurl", script: string) => {
   const root = mkdtempSync(join(tmpdir(), `summarize-${binary}-`));
   const binDir = join(root, "bin");
@@ -62,7 +64,7 @@ describe("tweet CLI helpers", () => {
     const { binDir } = makeCliScript("bird", scriptForJson(payload));
     const result = await readTweetWithBird({
       url: "https://x.com/user/status/123",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: binDir },
     });
 
@@ -111,7 +113,7 @@ describe("tweet CLI helpers", () => {
     const { binDir } = makeCliScript("xurl", scriptForJson(payload));
     const result = await readTweetWithXurl({
       url: "https://x.com/steipete/status/2",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: binDir },
     });
 
@@ -139,7 +141,7 @@ describe("tweet CLI helpers", () => {
     const { binDir: noteDir } = makeCliScript("xurl", scriptForJson(noteTweetPayload));
     const noteResult = await readTweetWithXurl({
       url: "https://x.com/steipete/status/5",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: noteDir },
     });
     expect(noteResult.text).toContain("full long-form X post text");
@@ -161,7 +163,7 @@ describe("tweet CLI helpers", () => {
     const { binDir: articleDir } = makeCliScript("xurl", scriptForJson(articlePayload));
     const articleResult = await readTweetWithXurl({
       url: "https://x.com/steipete/status/6",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: articleDir },
     });
     expect(articleResult.text).toContain("Deep Dive");
@@ -184,7 +186,7 @@ describe("tweet CLI helpers", () => {
 
     const result = await readTweetWithPreferredClient({
       url: "https://x.com/user/status/3",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: binDir },
     });
     expect(result.client).toBe("bird");
@@ -202,7 +204,7 @@ describe("tweet CLI helpers", () => {
 
     const preferred = await readTweetWithPreferredClient({
       url: "https://x.com/user/status/4",
-      timeoutMs: 1000,
+      timeoutMs: TEST_CLI_TIMEOUT_MS,
       env: { PATH: binDir },
     });
     expect(preferred.client).toBe("xurl");
@@ -214,7 +216,7 @@ describe("tweet CLI helpers", () => {
     await expect(
       readTweetWithBird({
         url: "https://x.com/user/status/1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_CLI_TIMEOUT_MS,
         env: { PATH: errorBird },
       }),
     ).rejects.toThrow(/bird read failed: boom/);
@@ -223,7 +225,7 @@ describe("tweet CLI helpers", () => {
     await expect(
       readTweetWithXurl({
         url: "https://x.com/user/status/1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_CLI_TIMEOUT_MS,
         env: { PATH: emptyXurl },
       }),
     ).rejects.toThrow(/xurl read returned empty output/);
@@ -232,7 +234,7 @@ describe("tweet CLI helpers", () => {
     await expect(
       readTweetWithBird({
         url: "https://x.com/user/status/1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_CLI_TIMEOUT_MS,
         env: { PATH: invalidBird },
       }),
     ).rejects.toThrow(/bird read returned invalid JSON/);
@@ -241,10 +243,27 @@ describe("tweet CLI helpers", () => {
     await expect(
       readTweetWithXurl({
         url: "https://x.com/user/status/1",
-        timeoutMs: 1000,
+        timeoutMs: TEST_CLI_TIMEOUT_MS,
         env: { PATH: invalidXurl },
       }),
     ).rejects.toThrow(/xurl read returned invalid payload/);
+
+    const { binDir: unauthorizedXurl } = makeCliScript(
+      "xurl",
+      scriptForJson({
+        title: "Unauthorized",
+        type: "about:blank",
+        status: 401,
+        detail: "Unauthorized",
+      }),
+    );
+    await expect(
+      readTweetWithXurl({
+        url: "https://x.com/user/status/1",
+        timeoutMs: TEST_CLI_TIMEOUT_MS,
+        env: { PATH: unauthorizedXurl },
+      }),
+    ).rejects.toThrow(/xurl auth status.*install "bird"/);
   });
 
   it("adds install tips only when neither xurl nor bird is available", () => {

@@ -40,6 +40,9 @@ Dev (repo checkout):
 - “Daemon not reachable”:
   - `summarize daemon status`
   - Logs: `~/.summarize/logs/daemon.err.log`
+- Windows install:
+  - `summarize daemon install` registers a Scheduled Task via `schtasks /Create /XML`, which requires an **elevated** shell. Run it from an Administrator PowerShell/cmd; otherwise you'll see `schtasks create failed: ERROR: Access is denied.`
+  - The task launches `wscript.exe //B //Nologo %USERPROFILE%\.summarize\daemon-launch.vbs`. If install completes but `/health` is unreachable, run `cscript //nologo %USERPROFILE%\.summarize\daemon-launch.vbs` to surface launcher errors, then `schtasks /Query /TN "Summarize Daemon" /V /FO LIST` to inspect the task state.
 - macOS `launchctl bootstrap` errors (`Input/output error`, `Domain does not support specified action`):
   - `summarize daemon install` now tries both launchd domains (`gui/<uid>` then `user/<uid>`).
   - Install as your normal user (not root) so HOME + launchd domain match.
@@ -141,7 +144,7 @@ See `docs/media.md` for detection and transcript rules.
 ## Model Selection UX
 
 - Settings:
-  - Model preset (Options → Advanced): `auto` | `free` | custom string (e.g. `openai/gpt-5-mini`, `openrouter/...`).
+  - Model preset (Options → Advanced): `auto` | `free` | custom string (e.g. `openai/gpt-5-mini`, `openai/gpt-5.5`, `openrouter/...`). OpenAI fast service tier is configured via `openai.serviceTier`.
   - Length: `short|medium|long|xl|xxl` (or a character target like `20k`). Tooltips show target ranges + paragraph guidance (from `packages/core/src/prompts/summary-lengths.ts`).
   - Language: `auto` (match source) or a tag like `en`, `de`, `pt-BR` (or free-form like “German”).
   - Prompt override (advanced): custom instruction prefix (context + content still appended).

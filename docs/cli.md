@@ -12,8 +12,8 @@ Summarize can use installed CLIs (Claude, Codex, Gemini, Cursor Agent, OpenClaw,
 
 - `cli/claude/<model>` (e.g. `cli/claude/sonnet`)
 - `cli/codex/<model>` (e.g. `cli/codex/gpt-5.2`)
-- `cli/gemini/<model>` (e.g. `cli/gemini/gemini-3-flash`)
-- `cli/agent/<model>` (e.g. `cli/agent/gpt-5.2`)
+- `cli/gemini/<model>` (e.g. `cli/gemini/flash`)
+- `cli/agent/<model>` (e.g. `cli/agent/auto`)
 - `cli/openclaw/<model>` (e.g. `cli/openclaw/main`)
 - `openclaw/<model>` (alias for the same OpenClaw CLI path)
 - `cli/opencode/<model>` (e.g. `cli/opencode/openai/gpt-5.4`)
@@ -21,6 +21,11 @@ Summarize can use installed CLIs (Claude, Codex, Gemini, Cursor Agent, OpenClaw,
 
 Use `--cli [provider]` (case-insensitive) for the provider default, or `--model cli/<provider>/<model>` to pin a model.
 If `--cli` is provided without a provider, auto selection is used with CLI enabled.
+
+Codex GPT Fast:
+
+- `--model codex-fast` maps to `cli/codex/gpt-fast`.
+- OpenAI fast mode is not a CLI model. Use `--model openai/gpt-5.5 --fast --thinking medium`; see `docs/openai.md`.
 
 ## Auto mode
 
@@ -102,14 +107,14 @@ path-based prompt and enables the required tool flags:
       "order": ["claude", "gemini", "codex", "agent", "openclaw", "opencode"]
     },
     "codex": { "model": "gpt-5.2" },
-    "gemini": { "model": "gemini-3-flash", "extraArgs": ["--verbose"] },
+    "gemini": { "model": "flash", "extraArgs": ["--verbose"] },
     "claude": {
       "model": "sonnet",
       "binary": "/usr/local/bin/claude",
       "extraArgs": ["--verbose"]
     },
     "agent": {
-      "model": "gpt-5.2",
+      "model": "auto",
       "binary": "/usr/local/bin/agent"
     },
     "openclaw": {
@@ -129,7 +134,7 @@ Notes:
 - If a CLI call fails, auto mode falls back to the next candidate.
 - Cursor Agent CLI uses the `agent` binary and relies on Cursor CLI auth (login or `CURSOR_API_KEY`).
 - Gemini CLI is invoked in headless mode with `--prompt` for compatibility with current Gemini CLI releases.
-- OpenClaw uses the `openclaw agent --agent <model> - --json` path, streams the prompt over stdin, and expects local OpenClaw auth/config to already be set up.
+- OpenClaw uses `openclaw agent --agent <model> --message <prompt> --json` because current OpenClaw requires `-m/--message`; very large extracted inputs are rejected before launch to avoid argv limits.
 - OpenCode uses `opencode run --format json`, streams prompt text over stdin, and uses the runtime default model when none is configured.
 
 ## Quick smoke test (all CLI providers)

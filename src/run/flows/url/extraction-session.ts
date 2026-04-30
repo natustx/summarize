@@ -69,7 +69,7 @@ export function createUrlExtractionSession({
       falApiKey: model.apiStatus.falApiKey,
       groqApiKey: model.apiStatus.groqApiKey,
       assemblyaiApiKey: model.apiStatus.assemblyaiApiKey,
-      openaiApiKey: model.apiStatus.openaiTranscriptionKey,
+      openaiApiKey: model.apiStatus.openaiApiKey,
       geminiApiKey: model.apiStatus.googleApiKey,
     },
     scrapeWithFirecrawl,
@@ -162,7 +162,8 @@ export function createUrlExtractionSession({
           ? urlUtils.shouldPreferUrlMode(targetUrl)
           : false;
       const isTwitter = urlUtils.isTwitterStatusUrl?.(targetUrl) ?? false;
-      if (!preferUrlMode || isTwitter) throw err;
+      const isPodcast = urlUtils.isPodcastHost?.(targetUrl) ?? false;
+      if (!preferUrlMode || isTwitter || isPodcast) throw err;
       writeVerbose(
         io.stderr,
         flags.verbose,

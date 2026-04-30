@@ -4,10 +4,11 @@ import { runCliModel } from "../llm/cli.js";
 import type { LlmApiKeys } from "../llm/generate-text.js";
 import { streamTextWithContext } from "../llm/generate-text.js";
 import { resolveGitHubModelsApiKey } from "../llm/github-models.js";
+import { mergeModelRequestOptions } from "../llm/model-options.js";
 import { buildAutoModelAttempts, envHasKey } from "../model-auto.js";
-import { parseRequestedModelId } from "../model-spec.js";
-import { parseCliUserModelId } from "../run/env.js";
+import { parseBooleanEnv, parseCliUserModelId } from "../run/env.js";
 import { resolveEnvState } from "../run/run-env.js";
+import { resolveModelSelection } from "../run/run-models.js";
 
 type ChatSession = {
   id: string;
@@ -93,11 +94,23 @@ function resolveApiKeys(
   const envState = resolveEnvState({ env, envForRun: env, configForCli });
   return {
     xaiApiKey: envState.xaiApiKey,
-    openaiApiKey: envState.apiKey ?? envState.openaiTranscriptionKey,
+    openaiApiKey: envState.apiKey ?? envState.openaiApiKey,
     googleApiKey: envState.googleApiKey,
     anthropicApiKey: envState.anthropicApiKey,
     openrouterApiKey: envState.openrouterApiKey,
   };
+}
+
+function resolveOpenAiUseChatCompletions({
+  env,
+  configForCli,
+}: {
+  env: Record<string, string | undefined>;
+  configForCli: SummarizeConfig | null;
+}): boolean {
+  const envValue = parseBooleanEnv(env.OPENAI_USE_CHAT_COMPLETIONS);
+  if (envValue !== null) return envValue;
+  return configForCli?.openai?.useChatCompletions === true;
 }
 
 export async function streamChatResponse({
@@ -127,11 +140,19 @@ export async function streamChatResponse({
 }) {
   const apiKeys = resolveApiKeys(env, configForCli);
   const envState = resolveEnvState({ env, envForRun: env, configForCli });
+  const openaiUseChatCompletions = resolveOpenAiUseChatCompletions({ env, configForCli });
+  const openaiRequestOptions = mergeModelRequestOptions(configForCli?.openai);
   const context = buildContext({ pageUrl, pageTitle, pageContent, messages });
 
   const resolveModel = () => {
     if (modelOverride && modelOverride.trim().length > 0) {
-      const requested = parseRequestedModelId(modelOverride);
+      const { requestedModel: requested } = resolveModelSelection({
+        config: configForCli ?? null,
+        configForCli: configForCli ?? null,
+        configPath: null,
+        envForRun: env,
+        explicitModelArg: modelOverride,
+      });
       if (requested.kind === "auto") {
         return null;
       }
@@ -179,7 +200,10 @@ export async function streamChatResponse({
             : requested.requiredEnv === "NVIDIA_API_KEY"
               ? envState.nvidiaBaseUrl
               : (requested.openaiBaseUrlOverride ?? null),
-        forceChatCompletions: Boolean(requested.forceChatCompletions),
+        forceChatCompletions:
+          Boolean(requested.forceChatCompletions) ||
+          (requested.provider === "openai" && openaiUseChatCompletions),
+        requestOptions: requested.requestOptions,
       };
     }
     return null;
@@ -218,6 +242,7 @@ export async function streamChatResponse({
       forceOpenRouter: resolved.forceOpenRouter,
       openaiBaseUrlOverride: resolved.openaiBaseUrlOverride,
       forceChatCompletions: resolved.forceChatCompletions,
+      requestOptions: mergeModelRequestOptions(openaiRequestOptions, resolved.requestOptions),
     });
     for await (const chunk of result.textStream) {
       pushToSession({ event: "content", data: chunk });
@@ -280,6 +305,8 @@ export async function streamChatResponse({
     timeoutMs: 30_000,
     fetchImpl,
     forceOpenRouter: attempt.forceOpenRouter,
+    forceChatCompletions: attempt.requiredEnv === "OPENAI_API_KEY" && openaiUseChatCompletions,
+    requestOptions: mergeModelRequestOptions(openaiRequestOptions, attempt.requestOptions),
   });
   for await (const chunk of result.textStream) {
     pushToSession({ event: "content", data: chunk });
